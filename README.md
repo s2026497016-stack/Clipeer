@@ -26,11 +26,11 @@ creator's live stream and clip the highlights while the stream is still running.
 You need Python 3.10 or newer and `ffmpeg` on your PATH.
 
 ```bash
-git clone <this repository> peakcut
+git clone <this repository> clipeer
 ```
 
 ```bash
-cd peakcut
+cd clipeer
 ```
 
 ```bash
