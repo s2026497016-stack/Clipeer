@@ -3,7 +3,7 @@
 # A server of its own: also set COMPOSE_PROFILES=own-https in .env. A shared server: see deploy/nginx-peakcut.conf.
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:f377d590e5474681d4d7838635031a2b50647923b7abfa803ce9b5ff35d5c663
     mem_limit: ${PEAKCUT_DB_MEM_LIMIT:-0}
     restart: unless-stopped
     environment:
@@ -45,11 +45,15 @@ services:
     cpus: ${PEAKCUT_CPUS:-0}
     cpu_shares: ${PEAKCUT_CPU_SHARES:-1024}
     oom_score_adj: ${PEAKCUT_OOM_SCORE_ADJ:-0}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
   # Only on a server Clipeer has to itself: add COMPOSE_PROFILES=own-https to .env and Caddy handles HTTPS.
   caddy:
     profiles: ["own-https"]
-    image: caddy:2
+    image: caddy:2@sha256:4e2425f6009577e7c651010f16679c28f7d12df3e7b1914f941a7a3370746b3c
     restart: unless-stopped
     depends_on: [app]
     ports: ["80:80", "443:443"]
