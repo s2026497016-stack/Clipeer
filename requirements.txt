@@ -7,6 +7,7 @@ python-multipart==0.0.32
 sherpa-onnx==2.0.1
 soundfile==0.14.0
 SQLAlchemy==2.0.57
+cryptography==46.0.3
 uvicorn==0.54.0
 yt-dlp==2026.10.21
 pillow==11.3.0

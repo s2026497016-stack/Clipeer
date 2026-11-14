@@ -7,6 +7,7 @@ from pathlib import Path
 import json
 
 from . import accounts, alerts, config, creators, ctx, jobs, live
+from .publishing import get_publisher
 
 _lock = threading.RLock()
 _FILE = config.DATA_DIR / "posts.json"
@@ -14,6 +15,21 @@ try:
     _posts: list = json.loads(_FILE.read_text(encoding="utf-8")) if _FILE.exists() else []
 except ValueError:
     _posts = []
+
+
+def _normalise(p):
+    """Import the original posts.json format while adding durable retry fields."""
+    p.setdefault("tries", 0)
+    p.setdefault("url", "")
+    p.setdefault("remote_id", "")
+    p.setdefault("error", None)
+    p.setdefault("views", None)
+    p.setdefault("created", time.time())
+    p.setdefault("publish_key", f"{p.get('user', '')}:{p.get('account', '')}:{p.get('job', '')}:{p.get('clip', '')}")
+    return p
+
+
+_posts = [_normalise(p) for p in _posts if isinstance(p, dict)]
 
 
 def _mine() -> list:
@@ -54,8 +70,18 @@ def _next_slot(account_id, gap_min, cap):
     return t
 
 
-def enqueue(job, clip, account_ids, now=False) -> list:
+def enqueue(job, clip, account_ids, now=False, metadata=None, due_at=None) -> list:
     c = creators.get(job["creator"]) or creators.DEFAULTS
+    metadata = metadata if isinstance(metadata, dict) else {}
+    if metadata.get("privacy") not in (None, "public", "unlisted", "private"):
+        raise ValueError("That privacy setting is not supported.")
+    if "title" in metadata:
+        metadata["title"] = str(metadata["title"])[:100]
+    if "description" in metadata:
+        metadata["description"] = str(metadata["description"])[:2000]
+    if "hashtags" in metadata:
+        tags = metadata["hashtags"] if isinstance(metadata["hashtags"], list) else str(metadata["hashtags"]).split()
+        metadata["hashtags"] = [str(x).lstrip("#").strip()[:40] for x in tags if str(x).strip()][:30]
     made = []
     with _lock:
         for aid in account_ids:
@@ -65,16 +91,47 @@ def enqueue(job, clip, account_ids, now=False) -> list:
             if any(p["job"] == job["id"] and p["clip"] == clip["id"] and p["account"] == aid
                    and p["status"] in OPEN + ("posted",) for p in _mine()):
                 continue  # never post the same clip to the same account twice
-            due = time.time() if now else _next_slot(aid, c["post_gap_min"], c["daily_cap"])
+            due = time.time() if now else (float(due_at) if due_at is not None else _next_slot(aid, c["post_gap_min"], c["daily_cap"]))
             p = {"id": secrets.token_hex(8), "user": ctx.uid(), "job": job["id"], "clip": clip["id"], "creator": job["creator"],
                  "account": aid, "account_name": acc["name"], "platform": acc["platform"], "status": "scheduled",
                  "due_at": due, "created": time.time(), "title": clip.get("title") or clip.get("hook") or "Clip",
-                 "score": clip.get("score", 0), "tries": 0, "url": "", "remote_id": "", "error": None, "views": None}
+                 "description": clip.get("description", ""), "hashtags": clip.get("hashtags", []),
+                 "privacy": c.get("privacy", "public"), "score": clip.get("score", 0), "tries": 0,
+                 "url": "", "remote_id": "", "error": None, "views": None}
+            for key in ("title", "description", "hashtags", "privacy"):
+                if key in metadata:
+                    p[key] = metadata[key]
+            # Stable across retries: adapters can use this as their idempotency key.
+            p["publish_key"] = f"{p['user']}:{p['account']}:{p['job']}:{p['clip']}"
             _posts.append(p)
             made.append(p)
         _save()
     for p in made:
         _mirror(p)
+    return made
+
+
+def enqueue_many(items) -> list:
+    """Queue multiple finished clips with one ownership-checked operation."""
+    made = []
+    for item in items if isinstance(items, list) else []:
+        job = jobs.get(str(item.get("job")))
+        clip = next((c for c in job["clips"] if c["id"] == item.get("clip")), None) if job else None
+        if not clip or clip.get("status") != "done":
+            raise ValueError("Every selected clip must be finished before publishing.")
+        accounts_ = [str(a) for a in item.get("accounts", [])][:20]
+        if not accounts_:
+            raise ValueError("Select at least one social account.")
+        due_at = item.get("due_at")
+        if due_at is not None:
+            try:
+                due_at = max(time.time(), float(due_at))
+            except (TypeError, ValueError):
+                raise ValueError("That schedule time isn't valid.")
+        metadata = {k: item[k] for k in ("title", "description", "hashtags", "privacy") if k in item}
+        made.extend(enqueue(job, clip, accounts_, now=bool(item.get("now")), metadata=metadata, due_at=due_at))
+    if not made:
+        raise ValueError("Nothing was queued. The selected clips may already be published.")
     return made
 
 
@@ -106,15 +163,23 @@ def _post(p):
             raise RuntimeError("That account was disconnected.")
         path = Path(job["dir"]) / "clips" / clip["file"]
         creator = creators.get(job["creator"]) or dict(creators.DEFAULTS, name="clips")
-        title, cap = clip.get("title") or clip.get("hook") or "Clip", _caption(clip, creator)
+        title = p.get("title") or clip.get("title") or clip.get("hook") or "Clip"
+        publish_clip = {**clip, "description": p.get("description", clip.get("description", "")),
+                        "hashtags": p.get("hashtags", clip.get("hashtags", []))}
+        cap = _caption(publish_clip, creator)
+        publisher = get_publisher(acc["platform"])
         if acc["platform"] == "youtube":
-            rid, url = accounts.youtube_upload(acc, path, title, cap + "\n\n#Shorts", clip.get("hashtags", []), creator["privacy"])
+            rid, url = publisher.publish(acc, path, title=title, description=cap + "\n\n#Shorts",
+                                         tags=publish_clip.get("hashtags", []), privacy=p.get("privacy", creator["privacy"]),
+                                         idempotency_key=p["publish_key"])
         elif acc["platform"] == "instagram":
-            rid, url = accounts.instagram_upload(acc, path, f"{title}\n\n{cap}", job["id"])
-        elif acc["platform"] == "tiktok":
-            rid, url = accounts.tiktok_upload(acc, path, f"{title}\n\n{cap}", creator["privacy"])
+            rid, url = publisher.publish(acc, path, caption=f"{title}\n\n{cap}", job_id=job["id"],
+                                         idempotency_key=p["publish_key"])
         else:
-            raise RuntimeError("That kind of account is no longer supported.")
+            rid, url = publisher.publish(acc, path, caption=f"{title}\n\n{cap}", privacy=p.get("privacy", creator["privacy"]),
+                                         idempotency_key=p["publish_key"])
+        if not rid:
+            raise RuntimeError("The platform did not confirm the published post.")
         p.update(status="posted", posted_at=time.time(), remote_id=rid, url=url, error=None)
         creators.log(p["creator"], f"Posted to {acc['name']}: {title}")
     except Exception as e:  # noqa: BLE001
@@ -143,6 +208,7 @@ def _run():
                         if p["status"] != "scheduled":
                             continue
                         p["status"] = "posting"
+                        _save()  # durable claim before any network request
                     _post(p)
             except Exception:  # noqa: BLE001
                 pass

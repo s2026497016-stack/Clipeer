@@ -1,8 +1,13 @@
-"""Turns a time range into a vertical clip: 9:16 layout, bouncy word captions, hook title, cover."""
+"""Turns a time range into a rendered clip.
+
+The renderer accepts the original ``style``/``layout`` options as well as a
+validated ``render`` object.  Keeping the normalization here means callers
+can safely pass old saved jobs and newer editor configurations alike.
+"""
+from dataclasses import dataclass
 import re
 import shutil
 import subprocess
-import tempfile
 from pathlib import Path
 
 from . import config
@@ -78,7 +83,92 @@ def install_fonts():
             shutil.copyfile(f, config.FONTS_DIR / f.name)
 
 
-LAYOUTS = {"blur": "Full frame + blurred fill", "zoom": "Zoomed in + blurred fill", "crop": "Fill the screen (centre crop)"}
+LAYOUTS = {"blur": "Full frame + blurred fill", "zoom": "Zoomed in + blurred fill", "crop": "Fill the screen (centre crop)",
+           "split-screen": "Split screen", "gaming-facecam": "Gaming facecam", "podcast": "Podcast"}
+ASPECTS = {"vertical": (1080, 1920), "9:16": (1080, 1920), "square": (1080, 1080), "1:1": (1080, 1080),
+           "landscape": (1920, 1080), "16:9": (1920, 1080)}
+CAPTION_POSITIONS = {"top", "center", "bottom"}
+
+
+@dataclass(frozen=True)
+class RenderConfig:
+    """Safe, serializable render settings used by the layout phase."""
+    aspect: str = "vertical"
+    layout: str = "blur"
+    background: str = "blur"
+    video_x: float = 0.5
+    video_y: float = 0.5
+    video_scale: float = 1.0
+    facecam_x: float = 0.78
+    facecam_y: float = 0.78
+    facecam_scale: float = 0.28
+    caption_position: str = "bottom"
+    caption_font: str = "Poppins ExtraBold"
+    caption_size: int | None = None
+    caption_color: str | None = None
+    caption_active_color: str | None = None
+    caption_background: str | None = None
+    caption_outline: int | None = None
+    preview: bool = False
+
+
+def validate_render_config(value=None, *, legacy=None) -> dict:
+    """Normalize and validate a render configuration without mutating input.
+
+    Unknown keys are ignored for forward compatibility; malformed known values
+    are rejected, while a non-object is rejected.
+    """
+    if value is None:
+        value = {}
+    if not isinstance(value, dict):
+        raise ValueError("Render configuration must be an object.")
+    if legacy:
+        value = {**legacy, **value}
+    out = dict(RenderConfig().__dict__)
+    aliases = {"format": "aspect", "caption": "caption_position", "font": "caption_font"}
+    for k, v in value.items():
+        k = aliases.get(k, k)
+        if k in out:
+            out[k] = v
+    aspect = str(out["aspect"]).lower()
+    if aspect not in ASPECTS:
+        raise ValueError("Unsupported render aspect.")
+    layout = str(out["layout"]).lower()
+    if layout not in LAYOUTS:
+        raise ValueError("Unsupported render layout.")
+    background = str(out["background"]).lower()
+    if background not in {"blur", "solid", "none"}:
+        raise ValueError("Unsupported render background.")
+    pos = str(out["caption_position"]).lower()
+    if pos not in CAPTION_POSITIONS:
+        raise ValueError("Unsupported caption position.")
+    for k in ("video_x", "video_y", "facecam_x", "facecam_y"):
+        out[k] = max(0.0, min(1.0, float(out[k])))
+    for k in ("video_scale", "facecam_scale"):
+        out[k] = max(0.05, min(4.0, float(out[k])))
+    if out["caption_size"] is not None:
+        out["caption_size"] = max(24, min(240, int(float(out["caption_size"]))))
+    if out["caption_outline"] is not None:
+        out["caption_outline"] = max(0, min(30, int(float(out["caption_outline"]))))
+    for k in ("caption_color", "caption_active_color", "caption_background"):
+        if out[k] is not None:
+            s = str(out[k]).lstrip("#")
+            if not re.fullmatch(r"[0-9a-fA-F]{6}", s):
+                raise ValueError("Caption colours must be six-digit hex values.")
+            out[k] = s.upper()
+    out["aspect"], out["layout"], out["background"], out["caption_position"] = aspect, layout, background, pos
+    out["caption_font"] = str(out["caption_font"]) if str(out["caption_font"]) in FONT_FILES else RenderConfig.caption_font
+    out["preview"] = bool(out["preview"])
+    return out
+
+
+def preview_config(value=None, src_w=1920, src_h=1080) -> dict:
+    """Return layout metadata for an editor preview without invoking FFmpeg."""
+    rc = validate_render_config(value)
+    width, height = ASPECTS[rc["aspect"]]
+    layout, fg_h, hook_y, cap_y = geometry(src_w, src_h, rc["layout"], width, height)
+    return {"config": rc, "width": width, "height": height, "foreground_height": fg_h,
+            "hook_y": hook_y, "caption_y": cap_y, "layout": layout}
 
 
 def _ts(t):
@@ -108,23 +198,23 @@ def _groups(words, per):
     return out
 
 
-def geometry(src_w, src_h, layout):
+def geometry(src_w, src_h, layout, width=W, height=H):
     """Where the video sits in the 1080x1920 frame, and where hook and captions go."""
     if src_h >= src_w and layout != "crop":
         layout = "crop"  # already vertical or square: nothing to gain from a blurred fill
     if layout == "blur":
-        fg_h = min(H, int(round(W * src_h / src_w / 2)) * 2)
+        fg_h = min(height, int(round(width * src_h / src_w / 2)) * 2)
     elif layout == "zoom":
-        fg_h = 1000
+        fg_h = int(height * 0.52)
     else:
         fg_h = H
-    top = (H - fg_h) // 2
+    top = (height - fg_h) // 2
     if layout == "crop":
-        return layout, fg_h, 300, 1380
-    return layout, fg_h, max(230, top - 190), min(1640, top + fg_h + 180)
+        return layout, fg_h, int(height * .16), int(height * .72)
+    return layout, fg_h, max(int(height * .12), top - int(height * .1)), min(int(height * .86), top + fg_h + int(height * .1))
 
 
-def _hook_events(hook, dur, y):
+def _hook_events(hook, dur, y, width=W):
     """The heading: dark text in a white rounded box that fits it, on one line or two balanced ones."""
     f, size = _Font.get(HOOK["font"]), HOOK["size"]
     words = hook.split()
@@ -140,7 +230,7 @@ def _hook_events(hook, dur, y):
         widest = max(f.width(l, size) for l in lines)
     line_h = f.em(size) * 1.16
     bw, bh = widest + 2 * HOOK["pad_x"], line_h * len(lines) + 2 * HOOK["pad_y"]
-    x0, y0, r = (W - bw) / 2, y - bh / 2, min(HOOK["radius"], bh / 2)
+    x0, y0, r = (width - bw) / 2, y - bh / 2, min(HOOK["radius"], bh / 2)
     x1, y1 = x0 + bw, y0 + bh
     n = lambda v: f"{v:.0f}"                                                         # noqa: E731
     box = (f"m {n(x0 + r)} {n(y0)} l {n(x1 - r)} {n(y0)} b {n(x1)} {n(y0)} {n(x1)} {n(y0)} {n(x1)} {n(y0 + r)} "
@@ -151,31 +241,50 @@ def _hook_events(hook, dur, y):
     ev = [f"Dialogue: 3,{span},Hook,,0,0,0,,{{\\an7\\pos(0,0)\\fad(160,0)\\c&H{HOOK['box']}&\\p1}}{box}{{\\p0}}"]
     for i, line in enumerate(lines):
         cy = y - line_h * (len(lines) - 1) / 2 + i * line_h - f.cap_shift(size)
-        ev.append(f"Dialogue: 4,{span},Hook,,0,0,0,,{{\\an5\\pos({W // 2},{cy:.0f})\\fad(160,0)\\fs{size}}}{line}")
+        ev.append(f"Dialogue: 4,{span},Hook,,0,0,0,,{{\\an5\\pos({width // 2},{cy:.0f})\\fad(160,0)\\fs{size}}}{line}")
     return ev
 
 
-def build_ass(words, start, end, hook, style_name, highlight, hook_y, cap_y) -> str:
+def build_ass(words, start, end, hook, style_name, highlight, hook_y, cap_y, render=None) -> str:
     st = STYLES.get(style_name, STYLES["bounce"])
+    rc = validate_render_config(render)
+    width, height = ASPECTS[rc["aspect"]]
+    st = dict(st)
+    if rc["caption_font"]:
+        st["font"] = rc["caption_font"]
+    for key, target in (("caption_size", "size"), ("caption_color", "base"),
+                        ("caption_active_color", "active"), ("caption_outline", "outline")):
+        if rc[key] is not None:
+            st[target] = rc[key]
+    if rc["caption_position"] == "top":
+        cap_y = int(height * .22)
+    elif rc["caption_position"] == "center":
+        cap_y = int(height * .54)
+    else:
+        cap_y = int(height * .78)
     words = [dict(w, s=w["s"] - CAPTION_LEAD, e=w["e"] - CAPTION_LEAD) for w in words]
     strong = {_key(h) for h in highlight if _key(h)}
     head = f"""[Script Info]
 ScriptType: v4.00+
-PlayResX: {W}
-PlayResY: {H}
+PlayResX: {width}
+PlayResY: {height}
 WrapStyle: 2
 ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Cap,{st['font']},{st['size']},&H00{st['base']},&H00{st['base']},&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,{st['outline']},0,5,0,0,0,1
+Style: Cap,{st['font']},{st['size']},&H00{st['base']},&H00{st['base']},&H00000000,&H00{rc['caption_background'] or '000000'},0,0,0,0,100,100,0,0,1,{st['outline']},0,5,0,0,0,1
 Style: Hook,{HOOK['font']},{HOOK['size']},&H00{HOOK['ink']},&H00{HOOK['ink']},&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     dur = end - start
-    ev = _hook_events(_clean(hook), dur, hook_y)
+    # Existing hook geometry is kept for vertical clips; other formats use a
+    # proportional position so the same API works for every aspect.
+    hook_y = int(hook_y * height / H)
+    cap_y = int(cap_y)
+    ev = _hook_events(_clean(hook), dur, hook_y, width)
     f = _Font.get(st["font"])
     inside = [dict(w, w=_clean(w["w"])) for w in words if w["s"] >= start - 0.05 and w["s"] < end]
     inside = [w for w in inside if w["w"]]
@@ -197,7 +306,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             gap = f.width("n n", size) - 2 * f.width("n", size) + (2 * st["outline"] + 6) * size / st["size"]   # a space, plus room for both outlines
             total = sum(f.width(t, size) for t in texts) + gap * (len(texts) - 1)
         cy = cap_y - f.cap_shift(size)
-        x = (W - total) / 2
+        x = (width - total) / 2
         p = st["pop"]
         for i, (w, t) in enumerate(zip(g, texts)):
             wd = f.width(t, size)
@@ -218,14 +327,38 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     return head + "\n".join(ev) + "\n"
 
 
-def _filter(layout, fg_h):
+def _filter(layout, fg_h, render=None):
+    rc = validate_render_config(render)
+    width, height = ASPECTS[rc["aspect"]]
+    if rc["background"] == "none":
+        background = f"color=c=black:s={width}x{height}:r={config.OUT_FPS}[bg];"
+    elif rc["background"] == "solid":
+        background = f"color=c=black:s={width}x{height}:r={config.OUT_FPS}[bg];"
+    else:
+        background = (f"[a]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,boxblur=6:2,"
+                      f"scale={width}:{height},eq=brightness=-0.14:saturation=1.15[bg];")
+    if layout == "split-screen":
+        return (f"[0:v]fps={config.OUT_FPS},split=2[a][b];"
+                f"[a]scale={width}:{height // 2}:force_original_aspect_ratio=increase,crop={width}:{height // 2}[top];"
+                f"[b]scale={width}:{height // 2}:force_original_aspect_ratio=increase,crop={width}:{height // 2}[bottom];"
+                f"[top][bottom]vstack,setsar=1[v0];")
+    if layout == "podcast":
+        return (f"[0:v]fps={config.OUT_FPS},scale={width}:{height}:force_original_aspect_ratio=increase,"
+                f"crop={width}:{height},setsar=1[v0];")
+    if layout == "gaming-facecam":
+        fx, fy, fs = rc["facecam_x"], rc["facecam_y"], rc["facecam_scale"]
+        return (f"[0:v]fps={config.OUT_FPS},split=3[a][b][c];{background}"
+                f"[b]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}[fg];"
+                f"[c]scale={width}*{fs:.4f}:{height}*{fs:.4f}:force_original_aspect_ratio=increase,"
+                f"crop={width}*{fs:.4f}:{height}*{fs:.4f}[face];"
+                f"[bg][fg]overlay=0:0[base];[base][face]overlay=x=(W-w)*{fx:.4f}:y=(H-h)*{fy:.4f},setsar=1[v0];")
     if layout == "crop":
-        return f"[0:v]fps={config.OUT_FPS},scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},setsar=1[v0];"
-    return (f"[0:v]fps={config.OUT_FPS},split=2[a][b];"
-            f"[a]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,boxblur=6:2,"
-            f"scale={W}:{H},eq=brightness=-0.14:saturation=1.15[bg];"
-            f"[b]scale={W}:{fg_h}:force_original_aspect_ratio=increase,crop={W}:{fg_h}[fg];"
-            f"[bg][fg]overlay=0:(H-h)/2,setsar=1[v0];")
+        return f"[0:v]fps={config.OUT_FPS},scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[v0];"
+    sx, sy, ss = rc["video_x"], rc["video_y"], rc["video_scale"]
+    return (f"[0:v]fps={config.OUT_FPS},split=2[a][b];" + background +
+            f"[b]scale={width}*{ss:.4f}:{fg_h}*{ss:.4f}:force_original_aspect_ratio=increase,"
+            f"crop={width}*{ss:.4f}:{fg_h}*{ss:.4f}[fg];"
+            f"[bg][fg]overlay=x=(W-w)*{sx:.4f}:y=(H-h)*{sy:.4f},setsar=1[v0];")
 
 
 _qsv_ok = None
@@ -235,27 +368,32 @@ def render_clip(src: Path, out_dir: Path, name: str, clip: dict, words: list, sr
     """Writes <name>.mp4, <name>.jpg and <name>.ass into out_dir. Returns file names."""
     out_dir.mkdir(parents=True, exist_ok=True)
     start, end = clip["start"], clip["end"]
-    layout, fg_h, hook_y, cap_y = geometry(src_w, src_h, clip.get("layout", "blur"))
+    render = validate_render_config(clip.get("render"), legacy=clip)
+    width, height = ASPECTS[render["aspect"]]
+    layout, fg_h, hook_y, cap_y = geometry(src_w, src_h, render["layout"], width, height)
     ass = build_ass(words, start, end, clip.get("hook", ""), clip.get("style", "bounce"),
-                    clip.get("highlight_words", []), hook_y, cap_y)
+                    clip.get("highlight_words", []), hook_y, cap_y, render)
     # The clip is made in a short work folder and moved into place afterwards. The caption step of ffmpeg cannot
     # open files whose full path is longer than 260 characters on Windows, which a data folder deep inside other
     # folders easily reaches. Inside the work folder every name is short and relative (a drive colon would also
     # break the filter syntax).
-    work = Path(tempfile.mkdtemp(prefix="pk"))
+    work = config.TMP_DIR / f"render-{name}-{__import__('os').urandom(5).hex()}"
+    work.mkdir(parents=True, exist_ok=False)
     try:
-        return _render_in(work, src, out_dir, name, start, end, layout, fg_h, ass)
+        return _render_in(work, src, out_dir, name, start, end, layout, fg_h, ass, render)
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
 
-def _render_in(work: Path, src: Path, out_dir: Path, name: str, start, end, layout, fg_h, ass: str) -> dict:
+def _render_in(work: Path, src: Path, out_dir: Path, name: str, start, end, layout, fg_h, ass: str, render=None) -> dict:
     global _qsv_ok
     (work / f"{name}.ass").write_text(ass, encoding="utf-8")
     (work / "f").mkdir()
     for f in config.FONTS_DIR.glob("*.ttf"):
         shutil.copyfile(f, work / "f" / f.name)
-    fc = _filter(layout, fg_h) + f"[v0]ass={name}.ass:fontsdir=f[v]"
+    rc = validate_render_config(render)
+    width, height = ASPECTS[rc["aspect"]]
+    fc = _filter(layout, fg_h, rc) + f"[v0]ass={name}.ass:fontsdir=f[v]"
     base = ["ffmpeg", "-y", "-v", "error", "-ss", f"{start:.2f}", "-t", f"{end - start:.2f}", "-i", str(src),
             "-filter_complex", fc, "-map", "[v]", "-map", "0:a:0", "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
             "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-movflags", "+faststart", "-pix_fmt"]
@@ -281,4 +419,5 @@ def _render_in(work: Path, src: Path, out_dir: Path, name: str, start, end, layo
          "-q:v", "3", f"{name}.jpg"], cwd=work)
     for ext in ("mp4", "jpg", "ass"):
         shutil.move(str(work / f"{name}.{ext}"), str(out_dir / f"{name}.{ext}"))
-    return {"file": f"{name}.mp4", "cover": f"{name}.jpg", "layout": layout}
+    return {"file": f"{name}.mp4", "cover": f"{name}.jpg", "layout": layout, "render": rc,
+            "width": width, "height": height}

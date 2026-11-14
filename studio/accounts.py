@@ -18,6 +18,7 @@ from urllib.parse import urlencode
 import httpx
 
 from . import config, ctx
+from .publishing.base import protect_account, reveal_account
 
 _lock = threading.RLock()
 _states: dict = {}   # one-time values for the connect redirects: state -> (user id, when, platform)
@@ -272,7 +273,7 @@ def public_settings() -> dict:
 
 # ------------------------------------------------------------------ accounts
 def _all() -> list:
-    return [a for a in _read("accounts.json", []) if a.get("platform") in PLATFORM_NAMES]
+    return [reveal_account(a) for a in _read("accounts.json", []) if a.get("platform") in PLATFORM_NAMES]
 
 
 def get(aid):
@@ -287,12 +288,12 @@ def list_accounts() -> list:
 def _put(acc):
     with _lock:
         rest = [a for a in _all() if a["id"] != acc["id"]]
-        _write("accounts.json", rest + [acc])
+        _write("accounts.json", [protect_account(a) for a in rest + [acc]])
 
 
 def remove(aid):
     with _lock:
-        _write("accounts.json", [a for a in _all() if a["id"] != aid])
+        _write("accounts.json", [protect_account(a) for a in _all() if a["id"] != aid])
 
 
 def _check(r, what):

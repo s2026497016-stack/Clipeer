@@ -22,7 +22,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from . import admin as admins
 from . import account, load
 from . import (accounts, ai, alerts, auth, config, creators, ctx, db, jobs, live, media, posting,
-               profiles, render, safe, transcribe, usage)
+               presets, profiles, render, safe, transcribe, usage)
 
 app = FastAPI(title="Clipeer", docs_url=None, redoc_url=None, openapi_url=None)
 WEB = config.ROOT / "web"
@@ -544,7 +544,41 @@ def status(request: Request):
     return {"user": auth.public(me_), "update": updates.latest() if me_.is_admin else None, "accounts": config.ACCOUNTS, "links": {"repo": config.REPO_URL, "follow": config.FOLLOW_URL}, "ai": usage.brief(), "unread": notices.unread(),
             "tour": not accounts.settings()["tour_done"],
             "youtube": accounts.youtube_ready(), "connect": {p: accounts.can_connect(p) for p in accounts.PLATFORM_NAMES}, "max_upload_mb": config.MAX_UPLOAD_MB, "upload_part_mb": config.UPLOAD_PART_MB, "max_batch": config.MAX_ACTIVE_JOBS_PER_USER,
-            "styles": {k: v["label"] for k, v in render.STYLES.items()}, "layouts": render.LAYOUTS}
+            "styles": {k: v["label"] for k, v in render.STYLES.items()}, "layouts": render.LAYOUTS,
+            "render_aspects": {k: f"{w}:{h}" for k, (w, h) in render.ASPECTS.items() if k in ("vertical", "square", "landscape")},
+            "caption_positions": sorted(render.CAPTION_POSITIONS)}
+
+
+@app.post("/api/render/preview")
+def render_preview(body: dict = Body(...)):
+    """Validate editor settings and return geometry; no video or publishing work is done."""
+    try:
+        return render.preview_config(body.get("render", body), float(body.get("width", 1920)),
+                                    float(body.get("height", 1080)))
+    except (ValueError, TypeError):
+        raise HTTPException(400, "That render configuration isn't valid.")
+
+
+@app.get("/api/render/presets")
+def render_presets():
+    return presets.list_presets()
+
+
+@app.post("/api/render/presets")
+def create_render_preset(body: dict = Body(...)):
+    try:
+        return presets.create(body.get("name"), body.get("render", body))
+    except (ValueError, TypeError) as e:
+        raise HTTPException(400, str(e))
+
+
+@app.delete("/api/render/presets/{pid}")
+def delete_render_preset(pid: str):
+    try:
+        presets.remove(pid)
+    except KeyError:
+        raise HTTPException(404, "No such preset")
+    return {"ok": True}
 
 
 # ================================================================ videos
@@ -1370,6 +1404,15 @@ def add_posts(body: dict = Body(...)):
     if not made:
         raise HTTPException(400, "Nothing was queued. Pick at least one account this clip has not already gone to.")
     return {"queued": len(made)}
+
+
+@app.post("/api/posts/batch")
+def add_posts_batch(body: dict = Body(...)):
+    try:
+        made = posting.enqueue_many(body.get("items", []))
+    except (ValueError, TypeError) as e:
+        raise HTTPException(400, str(e))
+    return {"queued": len(made), "posts": [p["id"] for p in made]}
 
 
 @app.post("/api/posts/{pid}/{action}")

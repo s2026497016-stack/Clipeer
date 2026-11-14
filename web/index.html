@@ -591,6 +591,11 @@ dialog::backdrop{background:rgba(14,12,11,.42);animation:fadein .16s ease}
 .editor video,.editor .stage img{width:100%;max-height:calc(100vh - 48px);aspect-ratio:9/16;object-fit:contain;display:block}
 .editor .panel{padding:22px;overflow:auto;display:flex;flex-direction:column;gap:14px}
 .editor h3{font-size:13px;font-weight:600;color:var(--dim);margin-top:6px}
+.render-tools{display:flex;flex-direction:column;gap:10px;padding-top:4px}.render-tools .row{flex-wrap:wrap}
+.render-preview{position:relative;width:100%;max-width:180px;aspect-ratio:9/16;background:#2b211c center/cover no-repeat;border:1px solid var(--line);overflow:hidden;display:grid;place-items:center;color:#fff;text-align:center}
+.render-preview.square{aspect-ratio:1}.render-preview.landscape{aspect-ratio:16/9;max-width:280px}.render-preview:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 55%,rgba(0,0,0,.7))}
+.render-preview span,.render-preview i{position:relative;z-index:1}.render-preview i{position:absolute;bottom:16%;font-style:normal;font-weight:700;font-size:12px}
+.render-preview.ready{outline:2px solid var(--brand)}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 #toasts{position:fixed;right:20px;bottom:20px;display:flex;flex-direction:column;gap:8px;z-index:50}
 .toast{background:var(--frame);color:var(--frame-text);border:1px solid var(--frame-2);border-radius:var(--r);padding:12px 16px;max-width:380px;animation:rise .2s ease;display:flex;gap:10px;align-items:center;font-weight:500}
@@ -1041,7 +1046,7 @@ function startTour() {
 }
 
 /* ============================================================ state */
-const S = {status:{styles:{}, layouts:{}}, jobs:[], creators:[], accounts:[], overview:null, settings:null,
+const S = {status:{styles:{}, layouts:{}}, jobs:[], creators:[], accounts:[], presets:[], overview:null, settings:null,
            view:"overview", ctab:"clips"};
 const D = {jid:null, cid:null, sig:""};
 const creatorId = () => S.view.startsWith("c:") ? S.view.slice(2) : null;
@@ -1240,6 +1245,7 @@ function drawShell() {  const nav = (v, icon, label, extra = "") => `<button cla
   put($("#nav"), nav("overview", navIc("home", "overview"), "Home") +
     nav("library", navIc("film", "library"), "All videos", (() => { const w = S.jobs.filter(j => ["queued", "running"].includes(j.status)).length;
       return w ? `<span class="working" title="${w} working now"><i></i>${w} working</span>` : S.jobs.length ? `<span class="count">${S.jobs.length}</span>` : ""; })()) +
+    nav("social", navIc("send", "social"), "Social publishing") +
     `<h4><span>Creators</span></h4>` +
     S.creators.map(c => nav("c:" + c.id, cav(c), c.name,
       c.live_job ? `<span class="sb-tag rec" title="Recording now"><i></i>Rec</span>`
@@ -1255,10 +1261,11 @@ function drawShell() {  const nav = (v, icon, label, extra = "") => `<button cla
       <button class="icon-btn bell" data-act="bell" title="Notifications" aria-label="Notifications${S.status.unread ? `, ${S.status.unread} new` : ""}" aria-haspopup="dialog">${ic("bell")}${S.status.unread ? `<span class="dotn">${S.status.unread > 9 ? "9+" : S.status.unread}</span>` : ""}</button></div>` : ""));
   const c = creator();
   const recording = S.creators.filter(x => x.live_job).length;
-  let title = {overview:"Home", library:"All videos", settings:"Settings", usage:"AI usage"}[S.view] || "", sub = "", act = "";
+  let title = {overview:"Home", library:"All videos", social:"Social publishing", settings:"Settings", usage:"AI usage"}[S.view] || "", sub = "", act = "";
   if (S.view === "usage") sub = "What the AI has been used for.";
   if (S.view === "overview") sub = `${greeting()}. ${S.creators.length} creator${S.creators.length === 1 ? "" : "s"}${recording ? `, ${recording} recording now` : ""}.`;
   if (S.view === "library") sub = "Every video and recording, across all creators.";
+  if (S.view === "social") sub = "Publish finished clips to your connected social accounts.";
   if (S.view === "settings") sub = (S.status.accounts === false ? "Your AI key and connected apps." : "Your profile, security and connected apps.");
   let pic = "", subHtml = null, tabs = "";
   if (c) {
@@ -1290,7 +1297,7 @@ function drawShell() {  const nav = (v, icon, label, extra = "") => `<button cla
   put($("#title"), `<span>${esc(title)}</span>`); put($("#subtitle"), subHtml ?? esc(sub)); put($("#actions"), act);
 }
 
-const ROUTES = {overview: "", library: "videos", settings: "settings", usage: "usage"};
+const ROUTES = {overview: "", library: "videos", social: "social", settings: "settings", usage: "usage"};
 function pathFor(v, tab) {
   if (v.startsWith("c:")) return `/app/creators/${encodeURIComponent(v.slice(2))}${tab && tab !== "clips" ? "/" + tab : ""}`;
   if (v === "settings") return "/app/settings" + (tab ? "/" + tab : "");
@@ -1324,6 +1331,7 @@ function go(v, tab, fromHistory) {
   else if (v === "library") view.innerHTML = `<div id="add"></div><div id="jobs"></div>`;
   else if (v === "settings") view.innerHTML = `<div id="sform"></div>`;
   else if (v === "usage") { view.innerHTML = `<div id="usage"></div>`; loadUsage(); }
+  else if (v === "social") { view.innerHTML = `<div id="social"></div>`; loadOverview().then(drawSocial); }
   else view.innerHTML = `<div id="stream"></div><div id="cbody"></div>`;   // the live player stays put across tabs: no restart, no rebuffer
   if ($("#add")) drawAdd(v === "overview" ? "hero" : "compact");
   if (v === "overview" && window.GradientASCII) { try { window._gaStop = GradientASCII($("#appAscii"), {colors: ["#ffb27a", "#ffffff", "#ffd2ae", "#ffe0c2", "#fff1e6"], shape: "horizon", lightMode: true, cellSize: 16, density: 0.8, glyphOpacity: 0.26, gradientOpacity: 0.32, glow: 0.06, grain: 0.06, mouseInteraction: false, clickEffect: "none"}); } catch {} }
@@ -1873,6 +1881,28 @@ function drawLog() {
 
 /* ============================================================ overview */
 async function loadOverview() { try { S.overview = await api("/api/overview"); } catch { return; } drawOverview(); }
+function socialClipRows() {
+  return S.jobs.flatMap(j => j.clips.filter(c => c.status === "done").map(c => ({j, c})));
+}
+function drawSocial() {
+  const box = $("#social"); if (!box) return;
+  const rows = socialClipRows(), accounts = S.accounts || [];
+  box.innerHTML = `<section class="set-sec"><h2>Publish finished clips</h2>
+    <p class="help">Choose one or more clips and connected accounts. Metadata is editable before queueing; the AI-generated values are prefilled from each clip.</p>
+    ${!accounts.length ? `<p class="help">Connect YouTube, Instagram, or TikTok in Settings, Connected apps first.</p>` : ""}
+    <div class="social-pick">${rows.length ? rows.map(({j,c}) => `<div class="social-row" data-srow="${j.id}:${c.id}">
+      <label class="ck"><input type="checkbox" data-social-clip value="${esc(j.id + ":" + c.id)}"> ${esc(c.title || c.hook || "Untitled clip")}</label>
+      <span class="sub">${esc(j.title || "")} · ${fmt(c.end - c.start)}</span>
+      <input data-smeta="title" value="${esc(c.title || c.hook || "Clip")}" aria-label="Title">
+      <input data-smeta="hashtags" value="${esc((c.hashtags || []).map(x => "#" + x).join(" "))}" aria-label="Hashtags" placeholder="#hashtags">
+      <textarea data-smeta="description" rows="2" aria-label="Description">${esc(c.description || "")}</textarea>
+    </div>`).join("") : `<p class="help">No finished clips are available yet.</p>`}</div>
+    ${accounts.length ? `<h3>Accounts</h3><div class="row">${accounts.map(a => `<label class="ck"><input type="checkbox" data-social-account value="${esc(a.id)}"> ${esc(a.label)} · ${esc(a.name)}</label>`).join("")}</div>
+      <div class="two"><label class="f">Privacy<select id="socialPrivacy"><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select></label>
+        <label class="f">Schedule (optional)<input id="socialDue" type="datetime-local"></label></div>
+      <div class="row"><button class="btn primary" data-act="socialpublish">Queue selected clips</button></div>` : ""}
+    <h3>Publishing history</h3>${S.overview?.posts?.length ? `<div class="table-wrap"><table><tbody>${S.overview.posts.map(p => `<tr><td>${esc(p.platform)} · ${esc(p.title)}</td><td><span class="pill ${p.status === "posted" ? "ok" : p.status === "failed" ? "bad" : "warn"}">${esc(p.status)}</span></td><td>${esc(p.error || p.url || "")}</td></tr>`).join("")}</tbody></table></div>` : `<p class="help">No publishing history yet.</p>`}</section>`;
+}
 function barChart(daily) {
   const W = 720, H = 230, pl = 30, pb = 28, pt = 12, n = daily.length, ch = H - pt - pb;
   const peak = Math.max(1, ...daily.map(d => Math.max(d.clips, d.posted)));
@@ -2091,7 +2121,68 @@ async function drawSettings() {
 async function saveSettings() { const d = {}; $$("#sform [data-s]").forEach(i => d[i.dataset.s] = i.value); await send("/api/settings", d, "PUT"); }
 
 /* ============================================================ clip editor */
-function openClip(jid, cid) { D.jid = jid; D.cid = cid; D.sig = ""; drawClipDlg(true); $("#clipdlg").showModal(); }
+function openClip(jid, cid) { D.jid = jid; D.cid = cid; D.sig = ""; drawClipDlg(true); $("#clipdlg").showModal(); loadRenderPresets().then(() => drawClipDlg(true)); }
+async function loadRenderPresets() {
+  try { S.presets = await api("/api/render/presets"); } catch { S.presets = []; }
+}
+function renderFields(c = {}) {
+  const r = c.render || {};
+  return {
+    aspect: r.aspect || "vertical", layout: r.layout || c.layout || "blur", background: r.background || "blur",
+    video_x: r.video_x ?? .5, video_y: r.video_y ?? .5, video_scale: r.video_scale ?? 1,
+    facecam_x: r.facecam_x ?? .78, facecam_y: r.facecam_y ?? .78, facecam_scale: r.facecam_scale ?? .28,
+    caption_position: r.caption_position || "bottom", caption_font: r.caption_font || "Poppins ExtraBold",
+    caption_size: r.caption_size ?? "", caption_color: r.caption_color || "", caption_active_color: r.caption_active_color || "",
+    caption_background: r.caption_background || "", caption_outline: r.caption_outline ?? ""
+  };
+}
+function renderConfigFromDialog(c = {}) {
+  const v = k => $(`#rf_${k}`)?.value;
+  const n = k => v(k) === "" || v(k) == null ? null : Number(v(k));
+  return {aspect:v("aspect"), layout:v("layout"), background:v("background"),
+    video_x:n("video_x"), video_y:n("video_y"), video_scale:n("video_scale"),
+    facecam_x:n("facecam_x"), facecam_y:n("facecam_y"), facecam_scale:n("facecam_scale"),
+    caption_position:v("caption_position"), caption_font:v("caption_font"),
+    caption_size:n("caption_size"), caption_color:v("caption_color") || null,
+    caption_active_color:v("caption_active_color") || null, caption_background:v("caption_background") || null,
+    caption_outline:n("caption_outline")};
+}
+async function previewRenderDialog() {
+  const j = jobOf(D.jid), c = j?.clips.find(x => x.id === D.cid);
+  if (!c) return;
+  try {
+    const r = await send("/api/render/preview", {render:renderConfigFromDialog(c), width:j.width || 1920, height:j.height || 1080});
+    const p = $("#renderPreviewMeta");
+    if (p) p.textContent = `${r.width}×${r.height} · ${r.layout} · captions ${r.config.caption_position}`;
+    $("#renderPreview")?.classList.add("ready");
+  } catch (e) { toast(e.message, "bad"); }
+}
+async function saveRenderPreset() {
+  const name = window.prompt("Preset name");
+  if (!name) return;
+  try {
+    await send("/api/render/presets", {name, render:renderConfigFromDialog()});
+    await loadRenderPresets(); drawClipDlg(true); toast("Preset saved", "ok");
+  } catch (e) { toast(e.message, "bad"); }
+}
+function renderControl(c) {
+  const r = renderFields(c), aspect = {vertical:"Vertical 9:16", square:"Square 1:1", landscape:"Landscape 16:9"};
+  const j = jobOf(D.jid), poster = j?.thumb ? `/media/${esc(j.id)}/thumb.jpg` : "";
+  const fonts = {"Poppins ExtraBold":"Poppins ExtraBold", Anton:"Anton", "Archivo Black":"Archivo Black"};
+  const preset = `<select id="rf_preset" aria-label="Render preset"><option value="">Preset…</option>${S.presets.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join("")}</select>`;
+  const sel = (id, map, val) => `<select id="rf_${id}" data-rf="${id}">${opts(map, val)}</select>`;
+  const num = (id, val, min, max, step) => `<input id="rf_${id}" data-rf="${id}" type="number" min="${min}" max="${max}" step="${step}" value="${val ?? ""}">`;
+  return `<div class="render-tools"><div class="row">${sel("aspect", aspect, r.aspect)}${sel("layout", S.status.layouts, r.layout)}${sel("background", {blur:"Blurred background",solid:"Solid background",none:"No background"}, r.background)}${preset}</div>
+    <div class="two"><label class="f">Caption position${sel("caption_position",{top:"Top",center:"Center",bottom:"Bottom"},r.caption_position)}</label>
+      <label class="f">Caption font${sel("caption_font",fonts,r.caption_font)}</label></div>
+    <div class="two"><label class="f">Caption size${num("caption_size",r.caption_size,24,240,1)}</label><label class="f">Outline width${num("caption_outline",r.caption_outline,0,30,1)}</label></div>
+    <div class="two"><label class="f">Caption colour<input id="rf_caption_color" data-rf="caption_color" type="text" placeholder="FFFFFF" value="${esc(r.caption_color)}"></label>
+      <label class="f">Active word colour<input id="rf_caption_active_color" data-rf="caption_active_color" type="text" placeholder="00F0FF" value="${esc(r.caption_active_color)}"></label></div>
+    <div class="two"><label class="f">Video X${num("video_x",r.video_x,0,1,.01)}</label><label class="f">Video Y${num("video_y",r.video_y,0,1,.01)}</label></div>
+    <div class="two"><label class="f">Video scale${num("video_scale",r.video_scale,.05,4,.01)}</label><label class="f">Facecam scale${num("facecam_scale",r.facecam_scale,.05,1,.01)}</label></div>
+    <div id="renderPreview" class="render-preview ${r.aspect}" style="${poster ? `background-image:url('${poster}')` : ""}"><span id="renderPreviewMeta">Preview not generated</span><i class="rp-caption">Caption preview</i></div>
+    <div class="row"><button class="btn" type="button" data-act="renderpreview">Preview layout</button><button class="btn" type="button" data-act="savepreset">Save preset</button></div></div>`;
+}
 function drawClipDlg(full) {
   const j = jobOf(D.jid), c = j?.clips.find(x => x.id === D.cid), dlg = $("#clipdlg");
   if (!c) { if (dlg.open) dlg.close(); return; }
@@ -2108,11 +2199,13 @@ function drawClipDlg(full) {
         <label class="f">Big text<input data-f="hook" value="${esc(c.hook)}"></label>
         <div class="two"><label class="f">Caption style<select data-f="style">${opts(S.status.styles, c.style)}</select></label>
           <label class="f">Layout<select data-f="layout">${opts(S.status.layouts, c.layout)}</select></label></div>
+        ${renderControl(c)}
         <div class="two"><label class="f">Start (seconds)<input data-f="start" type="number" step="0.5" value="${c.start}"></label>
           <label class="f">End (seconds)<input data-f="end" type="number" step="0.5" value="${c.end}"></label></div>
         <h3>Post text</h3>
         <label class="f">Title<input data-f="title" value="${esc(c.title)}"></label>
         <label class="f">Description<textarea data-f="description" rows="2">${esc(c.description)}</textarea></label>
+        <label class="f">Hashtags<input data-f="hashtags" value="${esc((c.hashtags || []).join(" "))}" placeholder="#shorts #clip"></label>
         <button class="btn" data-act="remake">${ic("scissors")}Save and re-make clip</button>
         <h3>Post it</h3>
         <div id="dposts" class="row" style="gap:4px"></div>
@@ -2129,6 +2222,16 @@ function drawClipDlg(full) {
 }
 $("#clipdlg").addEventListener("close", () => { $("#clipdlg").innerHTML = ""; D.jid = null; });
 $("#clipdlg").addEventListener("click", e => { if (e.target === e.currentTarget) e.currentTarget.close(); });
+$("#clipdlg").addEventListener("change", e => {
+  if (e.target.id !== "rf_preset") return;
+  const preset = S.presets.find(p => p.id === e.target.value);
+  if (!preset) return;
+  const c = jobOf(D.jid)?.clips.find(x => x.id === D.cid);
+  if (!c) return;
+  c.render = preset.render;
+  drawClipDlg(true);
+  toast(`Applied ${preset.name}`, "ok");
+});
 
 /* ============================================================ render + polling */
 function render() {
@@ -2385,6 +2488,25 @@ document.addEventListener("click", async e => {
     if (a === "csave") return void await saveCreator();
     if (a === "cdiscard") { drawCreatorForm(); return toast("Changes discarded"); }
     if (a === "pause") { await send("/api/settings", {paused:!S.overview.paused}, "PUT"); return loadOverview(); }
+    if (a === "socialpublish") {
+      const accounts_ = $$("#social [data-social-account]:checked").map(i => i.value);
+      const selected = $$("#social [data-social-clip]:checked");
+      if (!selected.length) return toast("Select at least one finished clip.", "bad");
+      if (!accounts_.length) return toast("Select at least one connected account.", "bad");
+      const due = $("#socialDue")?.value ? Date.parse($("#socialDue").value) / 1000 : null;
+      if (due != null && (!Number.isFinite(due) || due <= Date.now() / 1000)) return toast("Choose a future schedule time.", "bad");
+      const items = selected.map(i => {
+        const row = i.closest("[data-srow]");
+        const [job, clip] = row.dataset.srow.split(":");
+        const value = k => row.querySelector(`[data-smeta="${k}"]`)?.value || "";
+        return {job, clip, accounts:accounts_, title:value("title").slice(0, 100),
+          description:value("description").slice(0, 2000),
+          hashtags:value("hashtags").split(/[\s,]+/).map(x => x.replace(/^#/, "")).filter(Boolean).slice(0, 30),
+          privacy:$("#socialPrivacy")?.value || "public", due_at:due};
+      });
+      await send("/api/posts/batch", {items});
+      toast("Added to the publishing queue", "ok"); await loadOverview(); return drawSocial();
+    }
     if (a === "pcancel" || a === "pretry") { await api(`/api/posts/${d.id}/${a === "pcancel" ? "cancel" : "retry"}`, {method:"POST"}); return loadOverview(); }
     if (a === "ssave") { await saveSettings(); toast("Saved", "ok"); return drawSettings(); }
     if (a === "plansave") {
@@ -2398,8 +2520,12 @@ document.addEventListener("click", async e => {
     }
     if (a === "remake") {
       const body = {}; $$("#clipdlg [data-f]").forEach(i => body[i.dataset.f] = i.type === "number" ? Number(i.value) : i.value);
+      body.hashtags = (body.hashtags || "").split(/[\s,]+/).map(x => x.replace(/^#/, "").trim()).filter(Boolean).slice(0, 30);
+      body.render = renderConfigFromDialog(jobOf(D.jid)?.clips.find(x => x.id === D.cid));
       await send(`/api/jobs/${D.jid}/clips/${D.cid}/render`, body); toast("Re-making the clip…", "ok"); return tick();
     }
+    if (a === "renderpreview") return previewRenderDialog();
+    if (a === "savepreset") return saveRenderPreset();
     if (a === "postnow" || a === "postqueue") {
       const accs = $$("#clipdlg [data-pacc]:checked").map(i => i.value);
       if (!accs.length) return toast("Tick at least one account first.", "bad");

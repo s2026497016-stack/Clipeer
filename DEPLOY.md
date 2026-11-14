@@ -42,6 +42,13 @@ them in `.env`, see `.env.example`). The redirect address to register is shown i
 
 Instagram and TikTok only accept https redirect addresses.
 
+Publishing access tokens are encrypted at rest. In production, set
+`PEAKCUT_PUBLISHING_KEY` from a secret manager, or mount a restricted file and set
+`PEAKCUT_PUBLISHING_KEY_FILE`; do not rely on the generated data-directory key when
+deployments are rebuilt from scratch. The Social publishing page shows queued,
+confirmed, failed, and retryable posts, but a post is marked successful only after
+the platform confirms it.
+
 ## Google setup (sign-in and YouTube)
 
 In Google Cloud, create an OAuth client of type **Web application** with these redirect URIs:
