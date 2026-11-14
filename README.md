@@ -1,9 +1,9 @@
-# PeakCut
+# Clipeer
 
 Turn long videos and live streams into captioned vertical clips, ready to post. Free and open source: run it on
 your own computer or server, with your own AI key.
 
-Paste a YouTube, Twitch or Kick link (or upload a file) and PeakCut finds the moments worth clipping, cuts them to
+Paste a YouTube, Twitch or Kick link (or upload a file) and Clipeer finds the moments worth clipping, cuts them to
 9:16, adds word-by-word captions and a hook, and can post them to your connected accounts. It can also record a
 creator's live stream and clip the highlights while the stream is still running.
 
@@ -52,7 +52,7 @@ your AI service, paste your key and press **Save and test** (see [Choose your AI
 
 ## Choose your AI
 
-PeakCut needs a chat model that can return JSON. The easy way is in the dashboard: **Settings, AI**. Pick the
+Clipeer needs a chat model that can return JSON. The easy way is in the dashboard: **Settings, AI**. Pick the
 service, paste your key, press **Find models** to choose from the service's own list, then **Save and test**. The
 key is kept in the data folder on your machine and is never shown again.
 
@@ -101,7 +101,7 @@ Everything is set through environment variables, normally in a `.env` file next 
 
 This only matters with accounts switched on (`PEAKCUT_ACCOUNTS=1`); without them you are the owner and can do
 everything. An account is an admin only when the database says so. No email address is special in the code and no web request
-can change a role. Do it on the machine that runs PeakCut:
+can change a role. Do it on the machine that runs Clipeer:
 
 ```bash
 python -m studio.admin grant you@example.com
@@ -126,9 +126,9 @@ assistants.
 
 ## Updating
 
-PeakCut checks GitHub every few hours. When a newer version is out, the dashboard shows a notice with what changed
+Clipeer checks GitHub every few hours. When a newer version is out, the dashboard shows a notice with what changed
 and how to update: ask your AI coding assistant to do it (the notice has a sentence to paste), or run
-`git pull && pip install -r requirements.txt` in the PeakCut folder and restart it (with Docker:
+`git pull && pip install -r requirements.txt` in the Clipeer folder and restart it (with Docker:
 `git pull && docker compose up -d --build`). Your `.env`, keys and clips are not touched. Only the two commit ids
 are sent to GitHub; set `PEAKCUT_UPDATE_CHECK=0` to turn the check off.
 
@@ -161,7 +161,7 @@ queue tests against it, then removes it. It needs no keys and never touches real
 
 ## Security
 
-- With sign-in off, PeakCut listens on this computer only (`127.0.0.1`), refuses changes sent by other websites,
+- With sign-in off, Clipeer listens on this computer only (`127.0.0.1`), refuses changes sent by other websites,
   and only answers to its own address. Do not expose it to the internet that way: turn accounts on.
 - Passwords are stored only as salted scrypt hashes. Sessions are random tokens stored hashed; cookies are HTTP-only.
 - Every route works out who is asking from the session, never from the request, so users only reach their own data.

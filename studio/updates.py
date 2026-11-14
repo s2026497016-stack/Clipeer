@@ -1,7 +1,7 @@
-"""Is there a newer PeakCut? Compares the version running here with the latest on GitHub.
+"""Is there a newer Clipeer? Compares the version running here with the latest on GitHub.
 
 The version here is the git commit this folder is on (read straight from .git, no git program needed). Every few
-hours PeakCut asks GitHub's public API what has been added since; nothing about this server or its users is sent,
+hours Clipeer asks GitHub's public API what has been added since; nothing about this server or its users is sent,
 only the two commit ids. The owner then sees a notice in the dashboard with what changed and how to update.
 
     PEAKCUT_UPDATE_REPO     where to look (default: the project's own repository; a fork points at itself)
@@ -15,7 +15,7 @@ import httpx
 
 from . import config
 
-REPO = (config.env("PEAKCUT_UPDATE_REPO") or "haziqahmedqasmi/peakcut").strip().strip("/")
+REPO = (config.env("PEAKCUT_UPDATE_REPO") or "s2026497016-stack/Clipeer").strip().strip("/")
 BRANCH = (config.env("PEAKCUT_UPDATE_BRANCH") or "main").strip()
 ON = config.env("PEAKCUT_UPDATE_CHECK", "1") != "0" and bool(re.fullmatch(r"[\w.\-]+/[\w.\-]+", REPO))
 EVERY = 6 * 3600
@@ -49,7 +49,7 @@ def current() -> str:
 
 def _ask_github(here: str):
     r = httpx.get(f"https://api.github.com/repos/{REPO}/compare/{here}...{BRANCH}", timeout=20,
-                  headers={"Accept": "application/vnd.github+json", "User-Agent": "PeakCut-update-check"})
+                  headers={"Accept": "application/vnd.github+json", "User-Agent": "Clipeer-update-check"})
     if r.status_code != 200:
         return None                         # not public yet, a commit GitHub doesn't know, or too many checks
     d = r.json()

@@ -1,4 +1,4 @@
-"""PeakCut web server. Run with:  python -m studio.server
+"""Clipeer web server. Run with:  python -m studio.server
 
 Public pages:  /  /login  /signup          The app:  /app  (signed-in users only)
 Everything under /api, /media and /oauth needs a session, except /api/auth/* and /api/public."""
@@ -24,7 +24,7 @@ from . import account, load
 from . import (accounts, ai, alerts, auth, config, creators, ctx, db, jobs, live, media, posting,
                profiles, render, safe, transcribe, usage)
 
-app = FastAPI(title="PeakCut", docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title="Clipeer", docs_url=None, redoc_url=None, openapi_url=None)
 WEB = config.ROOT / "web"
 OPEN = ("/api/auth/", "/pub/", "/api/public", "/auth/google/", "/auth/verify", "/brand/", "/assets/", "/healthz", "/favicon.ico", "/robots.txt", "/sitemap.xml")
 PAGES = {"/": "landing.html", "/login": "auth.html", "/signup": "auth.html", "/reset": "reset.html",
@@ -115,7 +115,7 @@ class Gate:
             # must have been asked for by its real address (a number, "localhost", or the address in settings),
             # so another website cannot reach it through a made-up name that points at this machine.
             if not _own_address(req.headers.get("host", "")):
-                return await deny(403, "Open PeakCut by its own address.")
+                return await deny(403, "Open Clipeer by its own address.")
             if path == "/" or path == "/reset" or path.startswith("/auth/"):
                 return await deny(303, "", redirect="/app")
             if path.startswith("/api/auth/") and path != "/api/auth/me":
@@ -247,7 +247,7 @@ def _ip(request: Request) -> str:
 
 
 def _own_address(host: str) -> bool:
-    """Is this the address PeakCut is really reached by? A number (127.0.0.1, 192.168.1.20), "localhost", or the
+    """Is this the address Clipeer is really reached by? A number (127.0.0.1, 192.168.1.20), "localhost", or the
     host in PEAKCUT_PUBLIC_URL."""
     import ipaddress
     name = host.strip().lower()
@@ -331,9 +331,9 @@ def reset_page():
 
 
 LEGAL = {
-    "privacy": ("Privacy Policy", "How PeakCut collects, uses and protects your data, including Google user data, cookies and your privacy rights."),
-    "terms": ("Terms of Service", "The terms for using PeakCut, the AI clipping tool for streams and videos: accounts, availability and liability."),
-    "acceptable-use": ("Acceptable Use Policy", "What you may and may not do with PeakCut, the AI stream clipping tool."),
+    "privacy": ("Privacy Policy", "How Clipeer collects, uses and protects your data, including Google user data, cookies and your privacy rights."),
+    "terms": ("Terms of Service", "The terms for using Clipeer, the AI clipping tool for streams and videos: accounts, availability and liability."),
+    "acceptable-use": ("Acceptable Use Policy", "What you may and may not do with Clipeer, the AI stream clipping tool."),
 }
 
 
@@ -348,9 +348,9 @@ def legal_page(request: Request):
     contact = config.CONTACT_EMAIL
     who = (f'<a href="mailto:{_h.escape(contact)}">{_h.escape(contact)}</a>' if contact
            else "the contact details on our website")
-    name = _h.escape(config.LEGAL_NAME or "PeakCut")
+    name = _h.escape(config.LEGAL_NAME or "Clipeer")
     law = (f"the laws of {_h.escape(config.LEGAL_COUNTRY)}" if config.LEGAL_COUNTRY
-           else "the laws of the country where PeakCut's operator is established")
+           else "the laws of the country where Clipeer's operator is established")
     out = (_LEGAL_HTML or (WEB / "legal.html").read_text(encoding="utf-8"))
     for k, v in {"{{CONTACT}}": who, "{{PAGE}}": page, "{{PAGE_PATH}}": page, "{{SITE}}": _h.escape(config.PUBLIC_URL),
                  "{{NAME}}": name, "{{LAW}}": law, "{{TITLE}}": title, "{{DESC}}": desc}.items():
@@ -568,7 +568,7 @@ _disk: dict = {}
 def _quota():
     """Each account has a fixed amount of disk space. Measured at most once a minute."""
     if load.disk_full():
-        raise HTTPException(503, "PeakCut is out of space for new videos for the moment. Please try again shortly.")
+        raise HTTPException(503, "Clipeer is out of space for new videos for the moment. Please try again shortly.")
     uid = ctx.uid()
     got = _disk.get(uid)
     if not got or time.time() - got[0] > 60:
@@ -1017,7 +1017,7 @@ def email_preview(request: Request, kind: str = "verify"):
     from . import mailer
     _admin(request)
     if kind == "reset":
-        page = mailer.preview("Reset your password", "Someone asked to reset the password for this PeakCut account. If that was you, choose a new one below.",
+        page = mailer.preview("Reset your password", "Someone asked to reset the password for this Clipeer account. If that was you, choose a new one below.",
                               "Choose a new password", config.PUBLIC_URL + "/reset?t=example",
                               "The link works for one hour. If you didn't ask for this, ignore this email and your password stays the same.")
     else:
@@ -1032,9 +1032,9 @@ def test_email(request: Request):
     me_ = _admin(request)
     if not mailer.ready():
         raise HTTPException(400, "No email service is set up yet. Add the PEAKCUT_SMTP settings to .env first.")
-    mailer.send(me_.email, "PeakCut test email", "Your emails are working",
-                "This is a test from your PeakCut server. Account emails like this one will now reach people.",
-                "Open PeakCut", config.PUBLIC_URL + "/app", "You can ignore this message.")
+    mailer.send(me_.email, "Clipeer test email", "Your emails are working",
+                "This is a test from your Clipeer server. Account emails like this one will now reach people.",
+                "Open Clipeer", config.PUBLIC_URL + "/app", "You can ignore this message.")
     return {"sent_to": me_.email}
 
 
@@ -1394,7 +1394,7 @@ def test_alert():
         auth_problem = str(e)
     if auth_problem:
         raise HTTPException(429, auth_problem)
-    problems = alerts.send("PeakCut: test message. Alerts are working.")
+    problems = alerts.send("Clipeer: test message. Alerts are working.")
     if problems:
         raise HTTPException(400, "; ".join(problems))
     return {"ok": True}
@@ -1452,9 +1452,9 @@ def admin_delete_user(request: Request, uid: str, body: dict = Body(...)):
 
 
 def main():
-    print(f"\n  PeakCut is running:  {config.PUBLIC_URL}\n")
+    print(f"\n  Clipeer is running:  {config.PUBLIC_URL}\n")
     if not config.ACCOUNTS and (config.HTTPS or config.HOST not in ("127.0.0.1", "localhost", "::1")):
-        print("  Sign-in is off, so anyone who can reach this address can use PeakCut and its AI key.\n"
+        print("  Sign-in is off, so anyone who can reach this address can use Clipeer and its AI key.\n"
               "  On a server other people can reach, set PEAKCUT_ACCOUNTS=1 in .env.\n", flush=True)
     if config.env("PEAKCUT_AUTO_RELOAD") == "1":
         # restart by itself whenever the server code changes (pages in web/ never need a restart)

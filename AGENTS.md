@@ -1,4 +1,4 @@
-# Working on PeakCut
+# Working on Clipeer
 
 A short map for contributors and AI coding assistants.
 

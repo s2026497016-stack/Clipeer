@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PeakCut</title>
+<title>Clipeer</title>
 <link rel="icon" type="image/svg+xml" href="/brand/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -805,7 +805,7 @@ dialog[open]{animation:fadein .16s ease}
 <body>
 <div class="app" id="app">
   <aside class="side" aria-label="Sidebar">
-    <div class="side-head"><img class="logo" src="/brand/logo-light.svg" alt="PeakCut"><img class="mark" src="/brand/favicon.svg" alt="PeakCut">
+    <div class="side-head"><img class="logo" src="/brand/logo-light.svg" alt="Clipeer"><img class="mark" src="/brand/favicon.svg" alt="Clipeer">
       <button class="icon-btn collapse" data-act="collapse" id="collapseBtn" aria-label="Collapse sidebar"></button></div>
     <nav class="nav" id="nav" aria-label="Main"></nav>
     <div class="side-foot" id="foot"></div>
@@ -926,15 +926,15 @@ function startTour() {
   if (S.view !== "overview") go("overview");
   // sel: what the step points at.  side: it lives in the sidebar (opened for the step on phones).  dock: where the card sits on phones.
   const steps = [
-    {t: "Welcome to PeakCut", x: "Long videos and live streams go in, captioned vertical clips come out. Here is a quick look around.",
+    {t: "Welcome to Clipeer", x: "Long videos and live streams go in, captioned vertical clips come out. Here is a quick look around.",
      chips: [["link", "Paste a link"], ["scissors", "Get clips", 1], ["radio", "Live streams"], ["send", "Post them"]]},
-    {t: "Start with any video", x: "Paste a YouTube, Twitch or Kick link here, or upload a file. PeakCut finds the best moments and makes each one a short with captions.",
+    {t: "Start with any video", x: "Paste a YouTube, Twitch or Kick link here, or upload a file. Clipeer finds the best moments and makes each one a short with captions.",
      sel: "#addform", dock: "bottom", chips: [["link", "YouTube"], ["link", "Twitch"], ["link", "Kick"], ["up", "Upload", 1]]},
     {t: "Your day at a glance", x: "Home shows what is recording, how many clips were made and posted today, and what is waiting to go out.",
      sel: "#ov .tiles", dock: "bottom", chips: [["radio", "Recording"], ["scissors", "Clips today", 1], ["send", "Posted"], ["clock", "Waiting"]]},
     {t: "Every video in one place", x: "All videos lists everything you have processed. Open a video to see its clips, trim them, change the captions or download them.",
      sel: '#nav [data-v="library"]', side: 1, dock: "bottom", chips: [["film", "All videos", 1], ["play", "Preview"], ["sliders", "Edit"], ["down", "Download"]]},
-    {t: "Add the creators you clip", x: "Give each creator a workspace with their channels. PeakCut can record them when they go live and clip the highlights as they happen.",
+    {t: "Add the creators you clip", x: "Give each creator a workspace with their channels. Clipeer can record them when they go live and clip the highlights as they happen.",
      sel: '#nav [data-act="newcreator"]', side: 1, dock: "bottom", chips: [["plusc", "New creator", 1], ["radio", "Record live"], ["bolt", "Clip highlights"]]},
     {t: "The AI picks the moments", x: "This shows which AI this server uses and how much it has worked today. Open it to see what the AI was used for.",
      sel: "#foot .ai-card", side: 1, dock: "top", chips: [["bolt", "AI", 1], ["chart", "See usage"]]},
@@ -1090,7 +1090,7 @@ function drawStream() {
     pl.dataset.src = src;
     const ipHost = /^[\d.]+$|^\[/.test(location.hostname);
     pl.innerHTML = k === "twitch" && ipHost
-      ? `<div class="noembed">${platLogo(k)}<b>Twitch only plays inside sites with a web address</b><span>It will play here once PeakCut is on its domain, or open PeakCut at localhost instead of ${esc(location.hostname)}.</span><a class="btn sm" href="${esc(p.channel)}" target="_blank" rel="noopener">Watch on Twitch ${ic("upright")}</a></div>`
+      ? `<div class="noembed">${platLogo(k)}<b>Twitch only plays inside sites with a web address</b><span>It will play here once Clipeer is on its domain, or open Clipeer at localhost instead of ${esc(location.hostname)}.</span><a class="btn sm" href="${esc(p.channel)}" target="_blank" rel="noopener">Watch on Twitch ${ic("upright")}</a></div>`
       : src ? `<iframe src="${src}" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen title="${PLAT[k].name} live stream"></iframe>` : "";
   }
   const stats = [p.viewers != null ? [fmtK(p.viewers), "watching"] : null, p.started ? [since(p.started), "live for"] : null,
@@ -1102,7 +1102,7 @@ function drawStream() {
     ${stats.length ? `<div class="sstats">${stats.map(([v, l]) => `<div><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join("")}</div>` : ""}
     <div class="cta">${rec
       ? `<button class="btn danger" data-act="stoplive" data-j="${esc(rec)}">${ic("stop")}Stop recording</button><small>Recording now. Clips appear below as they're made.</small>`
-      : `<button class="btn primary" data-act="golive" data-url="${esc(p.channel)}"><span class="rdot"></span>Record this stream</button><small>PeakCut watches it and clips the best moments as they happen.</small>`}</div>`);
+      : `<button class="btn primary" data-act="golive" data-url="${esc(p.channel)}"><span class="rdot"></span>Record this stream</button><small>Clipeer watches it and clips the best moments as they happen.</small>`}</div>`);
 }
 function liveOn(c) { return Object.entries(c.profiles || {}).filter(([k, p]) => p.live && c.channels?.[k] === p.channel).sort(([, p]) => p.channel === c.channel ? -1 : 1); }
 function statusBadge(c) {
@@ -1209,14 +1209,14 @@ async function openFeedback(kind = "bug", context = "") {
 }
 function updateHow() {
   const up = S.status?.update, d = $("#formdlg"); if (!up || d.open) return;
-  const ai = "Update this PeakCut folder to the latest version from GitHub (git pull), keep my .env and data folder as they are, install any new requirements, and restart PeakCut.";
+  const ai = "Update this Clipeer folder to the latest version from GitHub (git pull), keep my .env and data folder as they are, install any new requirements, and restart Clipeer.";
   const cmd = (label, text) => `<h3>${label}</h3><div class="cmd"><code>${esc(text)}</code><button class="btn sm" type="button" data-act="copytext" data-t="${esc(text)}">${ic("copy")}Copy</button></div>`;
-  d.innerHTML = `<form method="dialog" class="dlg upd"><h2>A new version of PeakCut is out</h2>
+  d.innerHTML = `<form method="dialog" class="dlg upd"><h2>A new version of Clipeer is out</h2>
     <p class="help">You're on <b>${esc(up.current)}</b>. ${up.behind} update${up.behind === 1 ? " has" : "s have"} been added since. Your settings, keys and clips stay as they are.</p>
     ${up.notes.length ? `<ul>${up.notes.map(n => `<li>${esc(n.title)} <small>${esc(n.date)}</small></li>`).join("")}</ul>` : ""}
     ${cmd("Ask your AI coding assistant (Claude, Cursor, Copilot...)", ai)}
-    ${cmd("Or run it yourself, in the PeakCut folder", "git pull && pip install -r requirements.txt")}
-    <p class="sub">Then stop PeakCut and start it again. With Docker, run <code>git pull && docker compose up -d --build</code> instead. <a class="lnk" href="${esc(up.url)}" target="_blank" rel="noopener">See every change on GitHub</a></p>
+    ${cmd("Or run it yourself, in the Clipeer folder", "git pull && pip install -r requirements.txt")}
+    <p class="sub">Then stop Clipeer and start it again. With Docker, run <code>git pull && docker compose up -d --build</code> instead. <a class="lnk" href="${esc(up.url)}" target="_blank" rel="noopener">See every change on GitHub</a></p>
     <div class="dlg-foot"><button class="btn" value="later">Remind me next version</button><button class="btn primary" value="ok" autofocus>Got it</button></div></form>`;
   d.onclose = () => { if (d.returnValue === "later") { try { localStorage.setItem("peakcut_update_seen", up.latest); } catch {} drawShell(); } };
   d.returnValue = "ok"; d.showModal();
@@ -1273,15 +1273,15 @@ function drawShell() {  const nav = (v, icon, label, extra = "") => `<button cla
   }
   if (S.view === "overview" || S.view === "library") {
     const L = S.status.links || {};
-    act = (L.repo ? `<a class="btn" href="${esc(L.repo)}" target="_blank" rel="noopener" title="Star PeakCut on GitHub">${ic("github")}<span>Star<span class="long"> on GitHub</span></span></a>` : "")
-        + (L.follow ? `<a class="btn primary" href="${esc(L.follow)}" target="_blank" rel="noopener" title="Follow the maker of PeakCut on Instagram">${ic("instagram")}Follow me</a>` : "");
+    act = (L.repo ? `<a class="btn" href="${esc(L.repo)}" target="_blank" rel="noopener" title="Star Clipeer on GitHub">${ic("github")}<span>Star<span class="long"> on GitHub</span></span></a>` : "")
+        + (L.follow ? `<a class="btn primary" href="${esc(L.follow)}" target="_blank" rel="noopener" title="Follow the maker of Clipeer on Instagram">${ic("instagram")}Follow me</a>` : "");
   }
   const me = S.status.user;
   const kk = S.status.ai;
   const up = S.status.update;
   let upSeen = "";
   try { upSeen = localStorage.getItem("peakcut_update_seen") || ""; } catch {}
-  const upBar = up && up.latest !== upSeen ? `<div class="vb" role="status">${ic("up")}<span>A new version of PeakCut is out: <b>${up.behind} update${up.behind === 1 ? "" : "s"}</b> since yours.</span>
+  const upBar = up && up.latest !== upSeen ? `<div class="vb" role="status">${ic("up")}<span>A new version of Clipeer is out: <b>${up.behind} update${up.behind === 1 ? "" : "s"}</b> since yours.</span>
     <button class="btn sm primary" data-act="updhow">How to update</button><button class="btn sm ghost" data-act="updlater" aria-label="Hide until the next version">Later</button></div>` : "";
   put($("#vbanner"), upBar ? upBar : me && me.verified === false ? `<div class="vb" role="status">${ic("warn")}<span>Confirm your email to start clipping. We sent a link to <b>${esc(me.email)}</b>.</span><button class="btn sm" data-act="resendverify">Send a new link</button></div>`
     : kk && kk.ready === false && S.view !== "usage" ? `<div class="vb" role="status">${ic("bolt")}<span>${me?.is_admin ? "Add your AI key to let the AI pick clips and write titles. Until then, clips are picked by loudness." : "The AI isn't set up on this server yet, so clips are picked by loudness."}</span>${me?.is_admin && S.view !== "settings" ? `<button class="btn sm primary" data-act="go" data-v="settings" data-tab="ai">${ic("plus")}Add AI key</button>` : ""}</div>` : "");
@@ -1512,7 +1512,7 @@ async function lookUp(u) {
     if (e instanceof TypeError) {           // the request itself dropped (network blip): try once more quietly
       await new Promise(r => setTimeout(r, 800));
       try { return await api("/api/preview?url=" + encodeURIComponent(u)); }
-      catch (e2) { throw new Error(e2 instanceof TypeError ? "Couldn't reach PeakCut to check that link. Check your connection and paste it again." : e2.message); }
+      catch (e2) { throw new Error(e2 instanceof TypeError ? "Couldn't reach Clipeer to check that link. Check your connection and paste it again." : e2.message); }
     }
     throw e;
   }
@@ -1919,7 +1919,7 @@ function drawOverview() {
         ${barChart(o.daily || [])}</div>
       ${aiCard()}
     </div>
-    ${steps.length ? `<div class="card"><div class="card-head"><div><h2>Next steps</h2><p class="sub">Finish setting up PeakCut</p></div></div>
+    ${steps.length ? `<div class="card"><div class="card-head"><div><h2>Next steps</h2><p class="sub">Finish setting up Clipeer</p></div></div>
       <div class="steps across">${steps.map((x, i) => `<button class="step" data-act="step" data-to="${esc(x[2])}"><span class="n">${i + 1}</span><span><b>${esc(x[0])}</b><span class="d">${esc(x[1])}</span></span>${ic("arrowr")}</button>`).join("")}</div></div>` : ""}
     <div class="card"><div class="card-head"><div><h2>Creators</h2><p class="sub">Each creator's status and results</p></div></div>
       ${o.creators.length ? `<div class="scroll"><table><tr><th>Creator</th><th>Status</th><th>Auto-post</th><th class="num">Clips today</th><th class="num">Posted today</th><th class="num">Waiting</th><th class="num">Failed</th><th class="num">Views</th><th class="num">Est. $</th></tr>
@@ -2004,7 +2004,7 @@ async function drawSettings() {
   try {
     if (tab === "ai") {
       const k = S.ai = await api("/api/ai");
-      body.innerHTML = `<section class="set-sec"><h2>AI</h2><p class="help">PeakCut uses an AI model to pick the moments worth clipping and to write hooks, titles and captions. Use your own key from any of these services. You pay that service directly. Without a key, clips are picked by loudness.</p>
+      body.innerHTML = `<section class="set-sec"><h2>AI</h2><p class="help">Clipeer uses an AI model to pick the moments worth clipping and to write hooks, titles and captions. Use your own key from any of these services. You pay that service directly. Without a key, clips are picked by loudness.</p>
           <div class="ai-state">${k.ready ? `<span class="pill ok">${ic("check")}Ready</span><span class="sub">${esc(k.label)} · ${esc(k.models[0] || "")}</span>` : `<span class="pill warn">Not set up</span><span class="sub">Choose a service, paste your key and pick a model.</span>`}</div>
           <div class="ai-form">
             <label class="f">AI service<select id="ai_provider">${k.providers.map(x => `<option value="${esc(x.id)}" ${x.id === k.provider ? "selected" : ""}>${esc(x.label)}</option>`).join("")}</select></label>
@@ -2018,7 +2018,7 @@ async function drawSettings() {
     }
     if (tab === "profile") {
       const joined = me.created_at ? new Date(me.created_at * 1000).toLocaleDateString([], {day: "numeric", month: "long", year: "numeric"}) : "";
-      body.innerHTML = `<section class="set-sec"><h2>Profile</h2><p class="help">This is how you appear in PeakCut.</p>
+      body.innerHTML = `<section class="set-sec"><h2>Profile</h2><p class="help">This is how you appear in Clipeer.</p>
         <div class="prof">${meAvatar(me).replace('class="avatar me-pic"', 'class="avatar prof-pic"')}<div><b>${esc(me.name)}</b><span>${esc(me.email)}</span></div></div>
         <dl class="kv"><div><dt>Email</dt><dd>${esc(me.email)} ${me.verified === false ? `<span class="pill warn">Not confirmed</span>` : `<span class="pill ok">Confirmed</span>`}</dd></div>
           <div><dt>Sign-in method</dt><dd>${me.google ? `Google${me.has_password ? " and password" : ""}` : "Email and password"}</dd></div>
@@ -2032,7 +2032,7 @@ async function drawSettings() {
             <label class="f">${me.has_password ? "New password" : "Password"}<input id="pw_new" type="password" autocomplete="new-password" placeholder="At least 8 characters"></label></div>
           <div class="row" style="margin-top:14px"><button class="btn primary" data-act="pwsave">${me.has_password ? "Change password" : "Set password"}</button>
             ${me.has_password ? `<a class="btn ghost" href="/reset">Forgot it?</a>` : ""}</div></section>
-        <section class="set-sec"><h2>Sessions</h2><p class="help">Sign out of PeakCut on this device. Changing your password signs out every other device too.</p>
+        <section class="set-sec"><h2>Sessions</h2><p class="help">Sign out of Clipeer on this device. Changing your password signs out every other device too.</p>
           <button class="btn" data-act="logout">${ic("signout")}Sign out</button></section>
         <section class="set-sec"><h2 style="color:var(--bad)">Delete account</h2><p class="help">Removes your account and everything in it for good: creators, recordings, videos, clips and history.</p>
           <button class="btn danger" data-act="delaccount">${ic("trash")}Delete my account</button></section>`;
@@ -2071,7 +2071,7 @@ async function drawSettings() {
             <p class="sub">To let people connect ${name}, register this server once with <a href="${g[0]}" target="_blank" rel="noopener">${g[1]}</a>. It takes about five minutes.</p>
             <ol>${g[2].map(x => `<li>${x}</li>`).join("")}</ol>
             <div class="copyrow"><code>${esc(st.redirect)}</code><button class="btn sm" data-act="copytext" data-t="${esc(st.redirect)}">${ic("copy")}Copy</button></div>
-            ${!st.https && pf !== "youtube" ? `<p class="warnline">${name} only accepts https addresses. Put PeakCut on a domain with https (or a tunnel) and set PEAKCUT_PUBLIC_URL to it first.</p>` : ""}
+            ${!st.https && pf !== "youtube" ? `<p class="warnline">${name} only accepts https addresses. Put Clipeer on a domain with https (or a tunnel) and set PEAKCUT_PUBLIC_URL to it first.</p>` : ""}
             <div class="fields"><label class="f">${esc(st.id_label)}<input id="app_id" placeholder="${st.ready ? "Saved: " + esc(st.id_hint) + ". Paste a new one to replace it" : ""}" autocomplete="off" spellcheck="false"></label>
               <label class="f">${esc(st.secret_label)}<input id="app_secret" type="password" placeholder="${st.ready ? "Saved. Paste a new one to replace it" : ""}" autocomplete="off"></label></div>
             <p class="sub">${g[3]}</p>
@@ -2079,7 +2079,7 @@ async function drawSettings() {
         return `<div class="appcard"><span class="applogo" style="background:${bg}">${logo}</span>
           <div class="apptx"><b>${name}</b><span>${desc}</span>${listOf(accs)}</div><div class="appact">${act}</div>${panel}</div>`;
       };
-      body.innerHTML = `<section class="set-sec"><h2>Connected apps</h2><p class="help">Connect the accounts PeakCut posts clips to: press Connect, sign in on the platform's own page, and you're back here. PeakCut never sees your passwords. Then pick which accounts each creator posts to, in that creator's Setup.</p>
+      body.innerHTML = `<section class="set-sec"><h2>Connected apps</h2><p class="help">Connect the accounts Clipeer posts clips to: press Connect, sign in on the platform's own page, and you're back here. Clipeer never sees your passwords. Then pick which accounts each creator posts to, in that creator's Setup.</p>
         <div class="apps">
           ${card("youtube", "YouTube", yt, "#FF0000", "Post clips to your channel as Shorts.")}
           ${card("instagram", "Instagram", ig, "linear-gradient(45deg,#F58529,#DD2A7B,#8134AF)", "Post clips as Reels. Needs a Creator or Business account.")}
