@@ -1961,7 +1961,7 @@ function drawOverview() {
   const sum = k => o.creators.reduce((a, r) => a + r[k], 0);
   const d14 = k => (o.daily || []).reduce((a, d) => a + d[k], 0);
   const state = r => r.state === "recording" ? `<span class="pill live"><span class="dot"></span>Recording</span>` : r.state === "waiting" ? `<span class="pill warn">Waiting for live</span>` : `<span class="pill">Idle</span>`;
-  const pst = p => p.status === "posted" ? `<span class="pill ok">Posted</span>` : p.status === "failed" ? `<span class="pill bad">Failed</span>` : p.status === "posting" ? `<span class="pill warn">Posting now</span>` : `<span class="pill warn">${clock(p.due_at)}</span>`;
+  const pst = p => p.status === "posted" ? `<span class="pill ok">Posted</span>` : p.status === "failed" ? `<span class="pill bad">Failed</span>` : p.status === "review" ? `<span class="pill warn">Needs review</span>` : p.status === "posting" ? `<span class="pill warn">Posting now</span>` : `<span class="pill warn">${clock(p.due_at)}</span>`;
   const steps = nextSteps(o);
   put(box, `<div class="tiles">
       <div class="tile"><i>${ic("radio")}</i><b>${o.recording}</b><span>Recording now</span></div>
