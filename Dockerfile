@@ -16,10 +16,10 @@ RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin clipeer \
  && mkdir -p /data \
  && chown -R clipeer:clipeer /app /data
 
-ENV PEAKCUT_DATA=/data \
-    PEAKCUT_HOST=0.0.0.0 \
-    PEAKCUT_PORT=8765 \
-    PEAKCUT_TRUST_PROXY=1 \
+ENV CLIPEER_DATA=/data \
+    CLIPEER_HOST=0.0.0.0 \
+    CLIPEER_PORT=8765 \
+    CLIPEER_TRUST_PROXY=1 \
     PYTHONUNBUFFERED=1
 VOLUME /data
 USER clipeer

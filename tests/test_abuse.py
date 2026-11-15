@@ -81,7 +81,7 @@ check("not-modified never bypasses sign-in", httpx.Client(base_url=BASE).get("/a
 import subprocess  # noqa: E402
 probe = """
 import os
-os.environ["PEAKCUT_CLIENT_IP_HEADER"] = "CF-Connecting-IP"; os.environ["PEAKCUT_TRUST_PROXY"] = "1"
+os.environ["CLIPEER_CLIENT_IP_HEADER"] = "CF-Connecting-IP"; os.environ["CLIPEER_TRUST_PROXY"] = "1"
 from studio import server
 from starlette.datastructures import Headers
 class R:

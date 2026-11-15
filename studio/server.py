@@ -42,7 +42,7 @@ BOOT = f"{int(time.time()) % 100000:x}"     # part of every sync token, so pages
 @app.on_event("startup")
 async def _more_threads():
     import anyio.to_thread
-    anyio.to_thread.current_default_thread_limiter().total_tokens = int(config.env("PEAKCUT_REQUEST_THREADS", "64"))
+    anyio.to_thread.current_default_thread_limiter().total_tokens = int(config.env("CLIPEER_REQUEST_THREADS", "64"))
 
 
 @app.on_event("startup")
@@ -106,7 +106,7 @@ class Gate:
         is_open = path in PAGES or any(path.startswith(p) for p in OPEN)
         admin_area = path == "/admin" or path.startswith(("/admin/", "/api/admin/"))
         if config.ACCOUNTS:
-            cookie = req.cookies.get(auth.COOKIE, "")
+            cookie = req.cookies.get(auth.COOKIE, "") or req.cookies.get(auth.LEGACY_COOKIE, "")
             user = auth._sess.get(auth._h(cookie)) if cookie and not admin_area else None      # remembered: no database, no thread hop
             user = user[1] if user and time.time() - user[0] < auth.SESS_FOR else (
                 await run_in_threadpool(auth.user_for, cookie, admin_area) if cookie else None)
@@ -212,7 +212,7 @@ class Compress:
 app.add_middleware(Compress)
 
 
-# Cloudflare's published address ranges (cloudflare.com/ips). PEAKCUT_CDN_RANGES replaces them if they ever change.
+# Cloudflare's published address ranges (cloudflare.com/ips). CLIPEER_CDN_RANGES replaces them if they ever change.
 _CDN_RANGES = None
 
 
@@ -220,7 +220,7 @@ def _from_cdn(addr: str) -> bool:
     global _CDN_RANGES
     import ipaddress
     if _CDN_RANGES is None:
-        ranges = config.env("PEAKCUT_CDN_RANGES") or (
+        ranges = config.env("CLIPEER_CDN_RANGES") or (
             "173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 "
             "190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 "
             "104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 "
@@ -235,12 +235,12 @@ def _from_cdn(addr: str) -> bool:
 
 def _ip(request: Request) -> str:
     """The visitor's address, used for rate limits. The connection's own address, or the one the proxy in front
-    reports (PEAKCUT_TRUST_PROXY). If that connection comes from the CDN, the CDN's header names the real visitor
-    (PEAKCUT_CLIENT_IP_HEADER). The header is believed only when the CDN really sent the request, so nobody can
+    reports (CLIPEER_TRUST_PROXY). If that connection comes from the CDN, the CDN's header names the real visitor
+    (CLIPEER_CLIENT_IP_HEADER). The header is believed only when the CDN really sent the request, so nobody can
     pick their own address by sending it themselves."""
     fwd = request.headers.get("x-forwarded-for", "")
-    peer = (fwd.split(",")[0].strip() if fwd and config.env("PEAKCUT_TRUST_PROXY") else "") or (request.client.host if request.client else "")
-    named = config.env("PEAKCUT_CLIENT_IP_HEADER")
+    peer = (fwd.split(",")[0].strip() if fwd and config.env("CLIPEER_TRUST_PROXY") else "") or (request.client.host if request.client else "")
+    named = config.env("CLIPEER_CLIENT_IP_HEADER")
     if named and request.headers.get(named) and _from_cdn(peer):
         return request.headers[named].split(",")[0].strip()[:64]
     return peer
@@ -248,7 +248,7 @@ def _ip(request: Request) -> str:
 
 def _own_address(host: str) -> bool:
     """Is this the address Clipeer is really reached by? A number (127.0.0.1, 192.168.1.20), "localhost", or the
-    host in PEAKCUT_PUBLIC_URL."""
+    host in CLIPEER_PUBLIC_URL."""
     import ipaddress
     name = host.strip().lower()
     name = name[1:name.index("]")] if name.startswith("[") and "]" in name else name.rsplit(":", 1)[0] if ":" in name else name
@@ -488,9 +488,10 @@ def login(request: Request, body: dict = Body(...)):
 
 @app.post("/api/auth/logout")
 def logout(request: Request):
-    auth.end_session(request.cookies.get(auth.COOKIE, ""))
+    auth.end_session(request.cookies.get(auth.COOKIE, "") or request.cookies.get(auth.LEGACY_COOKIE, ""))
     resp = JSONResponse({"ok": True})
     resp.delete_cookie(auth.COOKIE, path="/")
+    resp.delete_cookie(auth.LEGACY_COOKIE, path="/")
     return resp
 
 
@@ -506,7 +507,7 @@ def change_password(request: Request, body: dict = Body(...)):
     try:
         auth.throttle("pw:" + _me(request).id, 6, 600)
         auth.change_password(_me(request).id, str(body.get("current", "")), str(body.get("new", "")),
-                             keep_token=request.cookies.get(auth.COOKIE, ""))
+                             keep_token=request.cookies.get(auth.COOKIE, "") or request.cookies.get(auth.LEGACY_COOKIE, ""))
     except auth.AuthError as e:
         raise HTTPException(400, str(e))
     return {"ok": True}
@@ -1065,7 +1066,7 @@ def test_email(request: Request):
     from . import mailer
     me_ = _admin(request)
     if not mailer.ready():
-        raise HTTPException(400, "No email service is set up yet. Add the PEAKCUT_SMTP settings to .env first.")
+        raise HTTPException(400, "No email service is set up yet. Add the CLIPEER_SMTP settings to .env first.")
     mailer.send(me_.email, "Clipeer test email", "Your emails are working",
                 "This is a test from your Clipeer server. Account emails like this one will now reach people.",
                 "Open Clipeer", config.PUBLIC_URL + "/app", "You can ignore this message.")
@@ -1531,15 +1532,15 @@ def main():
     print(f"\n  Clipeer is running:  {config.PUBLIC_URL}\n")
     if not config.ACCOUNTS and (config.HTTPS or config.HOST not in ("127.0.0.1", "localhost", "::1")):
         print("  Sign-in is off, so anyone who can reach this address can use Clipeer and its AI key.\n"
-              "  On a server other people can reach, set PEAKCUT_ACCOUNTS=1 in .env.\n", flush=True)
-    if config.env("PEAKCUT_AUTO_RELOAD") == "1":
+              "  On a server other people can reach, set CLIPEER_ACCOUNTS=1 in .env.\n", flush=True)
+    if config.env("CLIPEER_AUTO_RELOAD") == "1":
         # restart by itself whenever the server code changes (pages in web/ never need a restart)
         uvicorn.run("studio.server:app", host=config.HOST, port=config.PORT, log_level="warning", backlog=4096, reload=True,
                     reload_dirs=[str(config.ROOT / "studio")], reload_includes=["*.py"],
-                    proxy_headers=bool(config.env("PEAKCUT_TRUST_PROXY")), forwarded_allow_ips="*")
+                    proxy_headers=bool(config.env("CLIPEER_TRUST_PROXY")), forwarded_allow_ips="*")
         return
     uvicorn.run(app, host=config.HOST, port=config.PORT, log_level="warning", backlog=4096,
-                proxy_headers=bool(config.env("PEAKCUT_TRUST_PROXY")), forwarded_allow_ips="*")
+                proxy_headers=bool(config.env("CLIPEER_TRUST_PROXY")), forwarded_allow_ips="*")
 
 
 if __name__ == "__main__":

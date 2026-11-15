@@ -4,8 +4,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-os.environ["PEAKCUT_DATA"] = tempfile.mkdtemp(prefix="clipeer-features-")
-os.environ["PEAKCUT_PUBLISHING_KEY"] = "feature-test-secret"
+os.environ["CLIPEER_DATA"] = tempfile.mkdtemp(prefix="clipeer-features-")
+os.environ["CLIPEER_PUBLISHING_KEY"] = "feature-test-secret"
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from studio import ctx, presets, render

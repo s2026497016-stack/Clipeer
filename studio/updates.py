@@ -4,9 +4,9 @@ The version here is the git commit this folder is on (read straight from .git, n
 hours Clipeer asks GitHub's public API what has been added since; nothing about this server or its users is sent,
 only the two commit ids. The owner then sees a notice in the dashboard with what changed and how to update.
 
-    PEAKCUT_UPDATE_REPO     where to look (default: the project's own repository; a fork points at itself)
-    PEAKCUT_UPDATE_BRANCH   which branch (default: main)
-    PEAKCUT_UPDATE_CHECK=0  never look"""
+    CLIPEER_UPDATE_REPO     where to look (default: the project's own repository; a fork points at itself)
+    CLIPEER_UPDATE_BRANCH   which branch (default: main)
+    CLIPEER_UPDATE_CHECK=0  never look"""
 import re
 import threading
 import time
@@ -15,9 +15,9 @@ import httpx
 
 from . import config
 
-REPO = (config.env("PEAKCUT_UPDATE_REPO") or "s2026497016-stack/Clipeer").strip().strip("/")
-BRANCH = (config.env("PEAKCUT_UPDATE_BRANCH") or "main").strip()
-ON = config.env("PEAKCUT_UPDATE_CHECK", "1") != "0" and bool(re.fullmatch(r"[\w.\-]+/[\w.\-]+", REPO))
+REPO = (config.env("CLIPEER_UPDATE_REPO") or "s2026497016-stack/Clipeer").strip().strip("/")
+BRANCH = (config.env("CLIPEER_UPDATE_BRANCH") or "main").strip()
+ON = config.env("CLIPEER_UPDATE_CHECK", "1") != "0" and bool(re.fullmatch(r"[\w.\-]+/[\w.\-]+", REPO))
 EVERY = 6 * 3600
 _state = {"checked": 0.0, "result": None}
 _lock = threading.Lock()

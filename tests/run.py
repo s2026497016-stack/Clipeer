@@ -14,20 +14,20 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-PORT = int(os.environ.get("PEAKCUT_TEST_PORT", "8799"))
+PORT = int(os.environ.get("CLIPEER_TEST_PORT", "8799"))
 BASE = f"http://127.0.0.1:{PORT}"
 
 
 def main() -> int:
-    data = Path(tempfile.mkdtemp(prefix="peakcut-test-"))
-    env = {**os.environ, "PEAKCUT_DATA": str(data), "PEAKCUT_PORT": str(PORT), "PEAKCUT_PUBLIC_URL": BASE,
-           "PEAKCUT_HOST": "127.0.0.1", "PEAKCUT_AUTO_RELOAD": "0", "DATABASE_URL": "",
-           "PEAKCUT_ACCOUNTS": "1",                   # these tests are about people signing in; tests/test_local.py covers the default
+    data = Path(tempfile.mkdtemp(prefix="clipeer-test-"))
+    env = {**os.environ, "CLIPEER_DATA": str(data), "CLIPEER_PORT": str(PORT), "CLIPEER_PUBLIC_URL": BASE,
+           "CLIPEER_HOST": "127.0.0.1", "CLIPEER_AUTO_RELOAD": "0", "DATABASE_URL": "",
+           "CLIPEER_ACCOUNTS": "1",                   # these tests are about people signing in; tests/test_local.py covers the default
            # nothing outside this machine is contacted: no AI, no email, no Google sign-in
-           "PEAKCUT_SMTP_HOST": "", "PEAKCUT_VERIFY_EMAIL": "1",   # the tests cover the confirm-your-email rule
+           "CLIPEER_SMTP_HOST": "", "CLIPEER_VERIFY_EMAIL": "1",   # the tests cover the confirm-your-email rule
            "GOOGLE_CLIENT_ID": "", "GOOGLE_CLIENT_SECRET": "", "GOOGLE_CLIENT_FILE": "", "PYTHONUNBUFFERED": "1",
-           "PEAKCUT_AI_KEY": "", "PEAKCUT_AI_KEY_FILE": "", "PEAKCUT_AI_MODELS": "",
-           "PEAKCUT_UPLOAD_PART_MB": "5", "PEAKCUT_MAX_UPLOAD_MB": "64"}
+           "CLIPEER_AI_KEY": "", "CLIPEER_AI_KEY_FILE": "", "CLIPEER_AI_MODELS": "",
+           "CLIPEER_UPLOAD_PART_MB": "5", "CLIPEER_MAX_UPLOAD_MB": "64"}
     log = data / "server.log"
     failed = []
     with log.open("w", encoding="utf-8") as out:

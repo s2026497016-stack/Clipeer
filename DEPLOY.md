@@ -13,11 +13,11 @@ Clipeer runs as three containers on one Linux server: the app, PostgreSQL, and C
 ## Steps
 
 1. Copy this folder to the server (or `git clone` it there).
-2. `cp .env.example .env` and fill it in: the AI lines, `PEAKCUT_DOMAIN`, `POSTGRES_PASSWORD`, and
+2. `cp .env.example .env` and fill it in: the AI lines, `CLIPEER_DOMAIN`, `POSTGRES_PASSWORD`, and
    `COMPOSE_PROFILES=own-https` if the server is Clipeer's alone. Put key files, if you use files, in `./secrets/`.
 3. `docker compose up -d --build`
    The first start downloads the speech model (about 480 MB) and creates the database tables.
-4. Open `https://your-domain` and sign up. With Docker, accounts are on (`PEAKCUT_ACCOUNTS=1`), so everyone signs in.
+4. Open `https://your-domain` and sign up. With Docker, accounts are on (`CLIPEER_ACCOUNTS=1`), so everyone signs in.
    Every new account is a normal user.
 5. Make yourself an admin, on the server: `docker compose exec app python -m studio.admin grant you@example.com`
    The admin dashboard is then at `https://your-domain/admin`. It answers "not found" for everyone who is not an
@@ -43,8 +43,8 @@ them in `.env`, see `.env.example`). The redirect address to register is shown i
 Instagram and TikTok only accept https redirect addresses.
 
 Publishing access tokens are encrypted at rest. In production, set
-`PEAKCUT_PUBLISHING_KEY` from a secret manager, or mount a restricted file and set
-`PEAKCUT_PUBLISHING_KEY_FILE`; do not rely on the generated data-directory key when
+`CLIPEER_PUBLISHING_KEY` from a secret manager, or mount a restricted file and set
+`CLIPEER_PUBLISHING_KEY_FILE`; do not rely on the generated data-directory key when
 deployments are rebuilt from scratch. The Social publishing page shows queued,
 confirmed, failed, and retryable posts, but a post is marked successful only after
 the platform confirms it.
@@ -61,15 +61,15 @@ until then uploads from the API stay private.
 
 ## Email
 
-Set the `PEAKCUT_SMTP_*` lines and `PEAKCUT_MAIL_FROM` to send password-reset and confirmation emails through any
-SMTP service. On a public site also set `PEAKCUT_VERIFY_EMAIL=1`, so people confirm their address before clipping.
+Set the `CLIPEER_SMTP_*` lines and `CLIPEER_MAIL_FROM` to send password-reset and confirmation emails through any
+SMTP service. On a public site also set `CLIPEER_VERIFY_EMAIL=1`, so people confirm their address before clipping.
 Without SMTP on an HTTPS site, no reset emails can be sent.
 
 ## Good to know
 
 - **Data**: everything lives in two Docker volumes, `pgdata` (accounts, AI usage) and `data` (videos, clips).
-  Back both up. `docker compose exec db pg_dump -U peakcut peakcut > backup.sql` dumps the database.
-- **Capacity**: `PEAKCUT_JOB_WORKERS` is how many videos are processed at once; `PEAKCUT_MAX_LIVE` is how many live
+  Back both up. `docker compose exec db pg_dump -U clipeer clipeer > backup.sql` dumps the database.
+- **Capacity**: `CLIPEER_JOB_WORKERS` is how many videos are processed at once; `CLIPEER_MAX_LIVE` is how many live
   streams are recorded at once. Raise them only as far as the CPU allows.
 - **One server only**: jobs and live recordings run inside the app process. Do not start a second copy of the app
   against the same data.
@@ -84,25 +84,25 @@ Without SMTP on an HTTPS site, no reset emails can be sent.
 ## A server that already runs other sites
 
 Leave `COMPOSE_PROFILES=own-https` out of `.env`. Clipeer then listens only on `127.0.0.1:8765` and the web
-server that is already there forwards the domain to it: see `deploy/nginx-peakcut.conf`, or
+server that is already there forwards the domain to it: see `deploy/nginx-clipeer.conf`, or
 `deploy/docker-compose.traefik.yml` for Traefik.
 
 ## Cloudflare CDN in front
 
 With the record proxied (orange cloud):
 
-- Set `PEAKCUT_CLIENT_IP_HEADER=CF-Connecting-IP` in `.env`, so rate limits see each visitor, not Cloudflare. The
+- Set `CLIPEER_CLIENT_IP_HEADER=CF-Connecting-IP` in `.env`, so rate limits see each visitor, not Cloudflare. The
   header is only believed for connections that really come from Cloudflare's address ranges.
 - Images, videos and scripts under `/brand/` and `/assets/` are cached by Cloudflare automatically. Signed-in
   pages, clips and the API send `private` or `no-store` and are never cached by Cloudflare.
 - Use SSL/TLS mode Full (strict) with a Cloudflare origin certificate in `secrets/` and
-  `PEAKCUT_CADDYFILE=Caddyfile.origin`.
+  `CLIPEER_CADDYFILE=Caddyfile.origin`.
 - Cloudflare's standard plans refuse requests over 100 MB. Clipeer sends big uploads in pieces
-  (`PEAKCUT_UPLOAD_PART_MB`, 40 by default), so large files still work.
+  (`CLIPEER_UPLOAD_PART_MB`, 40 by default), so large files still work.
 
 ## Speech to text on a graphics card
 
 Optional. A second machine with an NVIDIA card can do most of the transcription much faster:
-`deploy/gpu/docker-compose.yml` runs it, and `PEAKCUT_ASR_URL` plus `PEAKCUT_ASR_TOKEN` on the main server point
+`deploy/gpu/docker-compose.yml` runs it, and `CLIPEER_ASR_URL` plus `CLIPEER_ASR_TOKEN` on the main server point
 at it. Keep its port closed to the internet. If it is unreachable, the main server carries on with its own
 processor.

@@ -26,8 +26,8 @@ def _key() -> bytes:
     global _KEY_CACHE
     if _KEY_CACHE is not None:
         return _KEY_CACHE
-    raw = config.env("PEAKCUT_PUBLISHING_KEY", "").strip()
-    path = config.env("PEAKCUT_PUBLISHING_KEY_FILE", "").strip()
+    raw = config.env("CLIPEER_PUBLISHING_KEY", "").strip()
+    path = config.env("CLIPEER_PUBLISHING_KEY_FILE", "").strip()
     if not raw and path and Path(path).exists():
         raw = Path(path).read_text(encoding="utf-8", errors="ignore").strip()
     if not raw:

@@ -8,8 +8,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-os.environ["PEAKCUT_DATA"] = tempfile.mkdtemp(prefix="clipeer-live-")
-os.environ["PEAKCUT_DIRECT_STREAM_HOSTS"] = "stream.example"
+os.environ["CLIPEER_DATA"] = tempfile.mkdtemp(prefix="clipeer-live-")
+os.environ["CLIPEER_DIRECT_STREAM_HOSTS"] = "stream.example"
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from studio import creators, jobs, live  # noqa: E402

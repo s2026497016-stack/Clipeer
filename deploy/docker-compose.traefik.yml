@@ -10,11 +10,11 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=${TRAEFIK_NETWORK:-proxy}
-      - traefik.http.routers.peakcut.rule=Host(`${PEAKCUT_DOMAIN}`)
-      - traefik.http.routers.peakcut.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
-      - traefik.http.routers.peakcut.tls=true
-      - traefik.http.routers.peakcut.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
-      - traefik.http.services.peakcut.loadbalancer.server.port=8765
+      - traefik.http.routers.clipeer.rule=Host(`${CLIPEER_DOMAIN}`)
+      - traefik.http.routers.clipeer.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.clipeer.tls=true
+      - traefik.http.routers.clipeer.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      - traefik.http.services.clipeer.loadbalancer.server.port=8765
 
 networks:
   proxy:

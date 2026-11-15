@@ -14,12 +14,12 @@ creator's live stream and clip the highlights while the stream is still running.
 - **Live clipping.** Records a stream into a rolling buffer and clips as it happens, using loudness, chat activity
   and the transcript.
 - **Direct live inputs.** YouTube Live, Twitch and Kick links work directly. HLS/DASH URLs can be enabled with
-  `PEAKCUT_DIRECT_STREAM_HOSTS`; this is intentionally opt-in so the server cannot be used as an arbitrary URL proxy.
+  `CLIPEER_DIRECT_STREAM_HOSTS`; this is intentionally opt-in so the server cannot be used as an arbitrary URL proxy.
 - **Workspaces per creator.** Channels, clip settings, posting rules and an activity log for each creator you clip.
 - **Posting.** Connect YouTube, Instagram and TikTok in one click, then queue or auto-post finished clips, with
   spacing and daily caps (see [DEPLOY.md](DEPLOY.md#connecting-youtube-instagram-and-tiktok) for the one-time setup).
 - **No sign-in on your own computer.** It opens straight into the dashboard. On a shared server, switch accounts on
-  (`PEAKCUT_ACCOUNTS=1`) for email or Google sign-in and an admin dashboard.
+  (`CLIPEER_ACCOUNTS=1`) for email or Google sign-in and an admin dashboard.
 - **Your own AI.** Gemini, OpenAI, Grok, Groq, OpenRouter, Claude, a local model through Ollama, or anything that
   speaks the OpenAI chat format. No key at all also works: clips are then picked by loudness.
 
@@ -61,12 +61,12 @@ key is kept in the data folder on your machine and is never shown again.
 If you prefer a file (or run a server), the same three things can go in `.env`. What is saved in the dashboard wins:
 
 ```ini
-PEAKCUT_AI_PROVIDER=gemini
-PEAKCUT_AI_MODELS=gemini-2.5-flash
-PEAKCUT_AI_KEY=your-key-here
+CLIPEER_AI_PROVIDER=gemini
+CLIPEER_AI_MODELS=gemini-2.5-flash
+CLIPEER_AI_KEY=your-key-here
 ```
 
-| `PEAKCUT_AI_PROVIDER` | Service | Where to get a key |
+| `CLIPEER_AI_PROVIDER` | Service | Where to get a key |
 |---|---|---|
 | `gemini` | Google Gemini | https://aistudio.google.com/apikey |
 | `openai` | OpenAI | https://platform.openai.com/api-keys |
@@ -75,9 +75,9 @@ PEAKCUT_AI_KEY=your-key-here
 | `openrouter` | OpenRouter (many models, one key) | https://openrouter.ai/keys |
 | `anthropic` | Claude | https://console.anthropic.com |
 | `ollama` | A model on your own machine, no key | https://ollama.com |
-| `custom` | Any OpenAI-compatible address: also set `PEAKCUT_AI_BASE_URL` | |
+| `custom` | Any OpenAI-compatible address: also set `CLIPEER_AI_BASE_URL` | |
 
-- `PEAKCUT_AI_MODELS` is the model id exactly as the service names it. Model names change often, so check the
+- `CLIPEER_AI_MODELS` is the model id exactly as the service names it. Model names change often, so check the
   service's current list. Several ids separated by commas are tried in order, which gives you a fallback.
 - A fast, inexpensive model is the right choice. A one-hour video is read in about four requests.
 - You pay the AI service directly for what you use. The **AI usage** page in the app shows how many requests and
@@ -91,17 +91,17 @@ Everything is set through environment variables, normally in a `.env` file next 
 
 | Setting | What it is for |
 |---|---|
-| `PEAKCUT_AI_PROVIDER`, `PEAKCUT_AI_MODELS`, `PEAKCUT_AI_KEY` | The AI that picks clips and writes titles (or set it in the dashboard) |
-| `PEAKCUT_ACCOUNTS` | `1` makes everyone sign in. Use it on any server other people can reach |
+| `CLIPEER_AI_PROVIDER`, `CLIPEER_AI_MODELS`, `CLIPEER_AI_KEY` | The AI that picks clips and writes titles (or set it in the dashboard) |
+| `CLIPEER_ACCOUNTS` | `1` makes everyone sign in. Use it on any server other people can reach |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional: Sign in with Google, and connecting YouTube |
-| `PEAKCUT_SMTP_*`, `PEAKCUT_MAIL_FROM` | Optional: confirmation and password emails |
-| `PEAKCUT_DATA` | Where videos, clips and the database are kept (default `./data`) |
+| `CLIPEER_SMTP_*`, `CLIPEER_MAIL_FROM` | Optional: confirmation and password emails |
+| `CLIPEER_DATA` | Where videos, clips and the database are kept (default `./data`) |
 
 `.env`, the `secrets/` folder and all user data are ignored by git. Keep keys there, never in the code.
 
 ## Admins
 
-This only matters with accounts switched on (`PEAKCUT_ACCOUNTS=1`); without them you are the owner and can do
+This only matters with accounts switched on (`CLIPEER_ACCOUNTS=1`); without them you are the owner and can do
 everything. An account is an admin only when the database says so. No email address is special in the code and no web request
 can change a role. Do it on the machine that runs Clipeer:
 
@@ -132,7 +132,7 @@ Clipeer checks GitHub every few hours. When a newer version is out, the dashboar
 and how to update: ask your AI coding assistant to do it (the notice has a sentence to paste), or run
 `git pull && pip install -r requirements.txt` in the Clipeer folder and restart it (with Docker:
 `git pull && docker compose up -d --build`). Your `.env`, keys and clips are not touched. Only the two commit ids
-are sent to GitHub; set `PEAKCUT_UPDATE_CHECK=0` to turn the check off.
+are sent to GitHub; set `CLIPEER_UPDATE_CHECK=0` to turn the check off.
 
 ## Deploy
 
