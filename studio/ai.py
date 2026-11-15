@@ -262,3 +262,25 @@ def _anthropic(model, prompt, schema):
     text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
     u = data.get("usage") or {}
     return _parse(text), int(u.get("input_tokens") or 0), int(u.get("output_tokens") or 0)
+
+
+def call_vision(model: str, prompt: str, frames: list, schema: dict):
+    """Gemini-only image understanding. frames is [(timestamp, jpeg_bytes), ...]."""
+    import base64
+    if provider() != "gemini":
+        raise AIError("Visual live detection currently requires Gemini to be selected in Settings > AI.")
+    parts = [{"text": prompt}]
+    for stamp, raw in frames:
+        parts.append({"text": f"Stream timestamp: {float(stamp):.1f} seconds"})
+        parts.append({"inlineData": {"mimeType": "image/jpeg", "data": base64.b64encode(raw).decode("ascii")}})
+    body = {"contents": [{"role": "user", "parts": parts}],
+            "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json", "responseSchema": schema}}
+    r = httpx.post(f"{base_url()}/{model}:generateContent", json=body,
+                   headers={"x-goog-api-key": key()}, timeout=120)
+    if r.status_code != 200:
+        _fail(r, model)
+    data = r.json()
+    answer = "".join(p.get("text", "") for p in data["candidates"][0]["content"]["parts"])
+    u = data.get("usageMetadata", {})
+    sent = int(u.get("promptTokenCount") or 0)
+    return json.loads(answer), sent, max(0, int(u.get("totalTokenCount") or 0) - sent)
