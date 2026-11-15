@@ -1875,7 +1875,8 @@ function drawCreatorForm() {
         <label class="f">Minutes of live stream to keep<input data-k="buffer_min" type="number" value="${c.buffer_min}"></label></div></div>
     <div class="card"><h2>Posting</h2><p class="help">${A.length ? "Choose the accounts this creator's clips go to. One account can be shared by several creators." : "No accounts are connected yet. Connect one in Settings, then come back."}</p>
       ${A.length ? `<div class="row" style="margin-bottom:16px">${A.map(a => `<label class="ck"><input type="checkbox" data-acc value="${esc(a.id)}" ${c.accounts.includes(a.id) ? "checked" : ""}>${esc(a.label)} · ${esc(a.name)}</label>`).join("")}</div>` : `<button class="btn" data-act="go" data-v="settings" style="margin-bottom:16px">${ic("cog")}Open Settings</button>`}
-      <div class="fields"><label class="sw span"><input type="checkbox" data-k="autopost" ${c.autopost ? "checked" : ""}><span>Post new clips automatically<small>Clips that score high enough go out without you approving them.</small></span></label>
+      <div class="fields"><label class="sw span"><input type="checkbox" data-k="autopost" ${c.autopost ? "checked" : ""}><span>Post new clips automatically<small>Clips that score high enough are sent to your selected accounts.</small></span></label>
+        <label class="sw span"><input type="checkbox" data-k="review_before_post" ${c.review_before_post ? "checked" : ""}><span>Review AI metadata before publishing<small>Pause each automatic post until you check its title, description and hashtags.</small></span></label>
         <label class="f">Only auto-post clips scoring at least<input data-k="post_min_score" type="number" min="0" max="100" value="${c.post_min_score}"></label>
         <label class="f">Minutes between posts on one account<input data-k="post_gap_min" type="number" value="${c.post_gap_min}"></label>
         <label class="f">Most posts per account per day<input data-k="daily_cap" type="number" value="${c.daily_cap}"></label>
@@ -1919,7 +1920,14 @@ function drawSocial() {
     ${accounts.length ? `<h3>Accounts</h3><div class="row">${accounts.map(a => `<label class="ck"><input type="checkbox" data-social-account value="${esc(a.id)}"> ${esc(a.label)} · ${esc(a.name)}</label>`).join("")}</div>
       <div class="two"><label class="f">Privacy<select id="socialPrivacy"><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select></label>
         <label class="f">Schedule (optional)<input id="socialDue" type="datetime-local"></label></div>
-      <div class="row"><button class="btn primary" data-act="socialpublish">Queue selected clips</button></div>` : ""}
+      <div class="row"><button class="btn primary" data-act="socialpublish">Queue selected clips</button><button class="btn" data-act="socialreview">Send selected clips for review</button></div>` : ""}
+    <h3>Metadata review</h3>${(S.overview?.posts || []).filter(p => p.status === "review").length ? `<div class="social-pick">${S.overview.posts.filter(p => p.status === "review").map(p => `<div class="social-row" data-review="${esc(p.id)}">
+      <b>${esc(p.title || "Untitled clip")}</b><span class="sub">${esc(p.creator_name || "Creator")} · ${esc(p.platform)} · ${esc(p.account_name)}</span>
+      <input data-reviewmeta="title" value="${esc(p.title || "Clip")}" aria-label="Post title">
+      <textarea data-reviewmeta="description" rows="3" aria-label="Post description">${esc(p.description || "")}</textarea>
+      <input data-reviewmeta="hashtags" value="${esc((p.hashtags || []).map(x => "#" + x).join(" "))}" aria-label="Hashtags">
+      <div class="row"><button class="btn" data-act="reviewsave" data-id="${esc(p.id)}">Save edits</button><button class="btn primary" data-act="reviewapprove" data-id="${esc(p.id)}">Approve &amp; publish</button><button class="btn danger" data-act="reviewreject" data-id="${esc(p.id)}">Reject</button></div>
+    </div>`).join("")}</div>` : `<p class="help">No clips are waiting for approval.</p>`}
     <h3>Publishing history</h3>${S.overview?.posts?.length ? `<div class="table-wrap"><table><tbody>${S.overview.posts.map(p => `<tr><td>${esc(p.platform)} · ${esc(p.title)}</td><td><span class="pill ${p.status === "posted" ? "ok" : p.status === "failed" ? "bad" : "warn"}">${esc(p.status)}</span></td><td>${esc(p.error || p.url || "")}</td></tr>`).join("")}</tbody></table></div>` : `<p class="help">No publishing history yet.</p>`}</section>`;
 }
 function barChart(daily) {
@@ -2522,7 +2530,7 @@ document.addEventListener("click", async e => {
     if (a === "csave") return void await saveCreator();
     if (a === "cdiscard") { drawCreatorForm(); return toast("Changes discarded"); }
     if (a === "pause") { await send("/api/settings", {paused:!S.overview.paused}, "PUT"); return loadOverview(); }
-    if (a === "socialpublish") {
+    if (a === "socialpublish" || a === "socialreview") {
       const accounts_ = $$("#social [data-social-account]:checked").map(i => i.value);
       const selected = $$("#social [data-social-clip]:checked");
       if (!selected.length) return toast("Select at least one finished clip.", "bad");
@@ -2533,13 +2541,27 @@ document.addEventListener("click", async e => {
         const row = i.closest("[data-srow]");
         const [job, clip] = row.dataset.srow.split(":");
         const value = k => row.querySelector(`[data-smeta="${k}"]`)?.value || "";
-        return {job, clip, accounts:accounts_, title:value("title").slice(0, 100),
+        return {job, clip, accounts:accounts_, review:a === "socialreview", title:value("title").slice(0, 100),
           description:value("description").slice(0, 2000),
           hashtags:value("hashtags").split(/[\s,]+/).map(x => x.replace(/^#/, "")).filter(Boolean).slice(0, 30),
           privacy:$("#socialPrivacy")?.value || "public", due_at:due};
       });
       await send("/api/posts/batch", {items});
-      toast("Added to the publishing queue", "ok"); await loadOverview(); return drawSocial();
+      toast(a === "socialreview" ? "Sent to metadata review" : "Added to the publishing queue", "ok"); await loadOverview(); return drawSocial();
+    }
+    if (a === "reviewsave" || a === "reviewapprove" || a === "reviewreject") {
+      const row = document.querySelector('[data-review="' + CSS.escape(d.id) + '"]');
+      const metadata = {};
+      if (a !== "reviewreject") {
+        metadata.title = row?.querySelector('[data-reviewmeta="title"]')?.value || "";
+        metadata.description = row?.querySelector('[data-reviewmeta="description"]')?.value || "";
+        metadata.hashtags = (row?.querySelector('[data-reviewmeta="hashtags"]')?.value || "").split(/[\\s,]+/).map(x => x.replace(/^#/, "")).filter(Boolean).slice(0, 30);
+      }
+      const action = a === "reviewsave" ? "save" : a === "reviewapprove" ? "approve" : "reject";
+      if (action === "reject" && !await ask("Reject this clip?", "It will not be published.", "Reject", true)) return;
+      await send("/api/posts/" + encodeURIComponent(d.id) + "/review", {action, metadata});
+      toast(action === "save" ? "Metadata saved" : action === "approve" ? "Approved. Publishing has been queued." : "Clip rejected", "ok");
+      await loadOverview(); return drawSocial();
     }
     if (a === "pcancel" || a === "pretry") { await api(`/api/posts/${d.id}/${a === "pcancel" ? "cancel" : "retry"}`, {method:"POST"}); return loadOverview(); }
     if (a === "ssave") { await saveSettings(); toast("Saved", "ok"); return drawSettings(); }
