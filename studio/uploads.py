@@ -152,7 +152,7 @@ def _loop():
                     with ThreadPoolExecutor(max_workers=min(8, len(ids)), thread_name_prefix="uploads") as pool:
                         list(pool.map(scan_user, ids))
             else:
-                scan_user("local")
+                scan_user(auth.local_user().id)
         except Exception:  # noqa: BLE001
             pass
         time.sleep(max(15, POLL_SECONDS - (time.time() - started)))
