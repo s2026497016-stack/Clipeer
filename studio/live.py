@@ -378,7 +378,7 @@ class Session:
         last_clip = max((c.get("made_at", 0) for c in self.job["clips"]), default=self.started_at)
         must = st["must_clip_min"] > 0 and time.time() - last_clip >= st["must_clip_min"] * 60
         verdict = {"t": round(now), "transcript": None, "reaction": None, "trigger": why}
-        if len(win) < 8:
+        if len(win) < 15:
             self.skipped += 1
             return self._verdict(verdict, "Skipped: nobody talking")
         if len(recent) >= st["live_per_hour"] and not must:
