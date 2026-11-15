@@ -1216,6 +1216,28 @@ def go_live(cid: str, body: dict = Body(default={})):
         raise HTTPException(400, str(e))
 
 
+@app.get("/api/live")
+def list_live():
+    """Live monitoring jobs for the signed-in user, including completed recent sessions."""
+    return [jobs.public(j) for j in jobs.list_jobs() if j.get("kind") == "live"]
+
+
+@app.post("/api/live")
+def start_live(body: dict = Body(...)):
+    _need_verified()
+    url = str(body.get("url") or "").strip()[:500]
+    if not url:
+        raise HTTPException(400, "Paste a live stream URL.")
+    cid = str(body.get("creator") or "")
+    creator = creators.get(cid) if cid else None
+    if cid and not creator:
+        raise HTTPException(404, "No such creator")
+    try:
+        return jobs.public(live.start_direct_session(url, creator))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
 @app.post("/api/live/{jid}/stop")
 def stop_live(jid: str):
     s = live.mine(jid)
@@ -1223,6 +1245,17 @@ def stop_live(jid: str):
         raise HTTPException(404, "This recording has already ended")
     s.stop()
     return {"ok": True}
+
+
+@app.post("/api/live/{jid}/resume")
+def resume_live(jid: str):
+    job = _job_or_404(jid)
+    if job.get("kind") != "live":
+        raise HTTPException(400, "This is not a live recording.")
+    try:
+        return jobs.public(live.resume_session(job))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @app.post("/api/live/{jid}/clip")

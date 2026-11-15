@@ -8,6 +8,7 @@ import subprocess
 import threading
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 import numpy as np
 
@@ -39,6 +40,19 @@ def normalize(url: str) -> str:
     return m.group(1) + "/live" if m else url
 
 
+def _direct_allowed(url: str) -> bool:
+    p = urlparse(url)
+    host = (p.hostname or "").lower()
+    path = p.path.lower()
+    return (p.scheme in ("http", "https") and
+            any(host == h or host.endswith("." + h) for h in config.DIRECT_STREAM_HOSTS) and
+            (path.endswith((".m3u8", ".mpd", ".ts", ".m4s")) or "manifest" in path or "stream" in path))
+
+
+def url_allowed(url: str) -> bool:
+    return media.site_allowed(normalize(url)) or _direct_allowed(normalize(url))
+
+
 class _Quiet:
     def debug(self, m): pass
     def info(self, m): pass
@@ -48,6 +62,10 @@ class _Quiet:
 
 def resolve(url: str) -> dict:
     """Ask yt-dlp for the stream's playable address. Raises NotLive if the channel is offline."""
+    url = normalize(url)
+    if _direct_allowed(url):
+        return {"urls": [url], "title": Path(urlparse(url).path).stem[:120] or "Direct live stream",
+                "uploader": urlparse(url).hostname or "", "direct": True}
     import yt_dlp
     opts = {"quiet": True, "no_warnings": True, "noplaylist": True, "logger": _Quiet(),
             "format": "b[height<=720]/bv*[height<=720]+ba/b"}
@@ -135,6 +153,8 @@ class Session:
         self.last_spike = -999.0      # when the last jump was sent to the AI (stream seconds)
         self.base = {}                # running averages the jumps are measured against, shown on the card
         self.spikes = 0
+        self.reconnects = 0
+        self.last_error = ""
 
     # ---------------------------------------------------------------- recording
     def start(self):
@@ -160,16 +180,20 @@ class Session:
     def _ingest(self):
         fails = 0
         url = self.job["source"]["url"]
+        reconnect_deadline = time.time() + config.LIVE_RECONNECT_MINUTES * 60
         while not self.stop_flag.is_set():
             try:
                 info = resolve(url)
             except NotLive as e:
                 fails += 1
-                if self.samples == 0 or fails >= 3:
+                self.last_error = str(e)[-200:]
+                if self.samples == 0 or time.time() >= reconnect_deadline:
                     if self.samples == 0:
                         self.job["error"] = f"Could not start recording: {e}"
                     break
-                self.stop_flag.wait(10)
+                self.job.update(stage="Reconnecting to stream", reconnects=self.reconnects + 1)
+                self.reconnects += 1
+                self.stop_flag.wait(min(30, 3 * fails))
                 continue
             if not self.job.get("uploader"):
                 self.job.update(title=info["title"], uploader=info["uploader"])
@@ -203,9 +227,16 @@ class Session:
                         self.samples += len(data) // 2
                         self.db.append(level)
                 self.proc.wait()
-            fails = 0 if got > SR * 2 * 20 else fails + 1
-            if fails >= 3:
+            if got > SR * 2 * 20:
+                fails = 0
+                reconnect_deadline = time.time() + config.LIVE_RECONNECT_MINUTES * 60
+            else:
+                fails += 1
+                self.reconnects += 1
+            if time.time() >= reconnect_deadline:
                 break
+            if not self.stop_flag.is_set():
+                self.job.update(stage="Reconnecting to stream", reconnects=self.reconnects)
             self.stop_flag.wait(3)
         self.ended = True
 
@@ -443,6 +474,8 @@ class Session:
             self._add_clip(c)
 
     def _add_clip(self, c):
+        if any(self._overlaps(c, old) for old in self.job["clips"]):
+            return
         self.n += 1
         c.update(id=f"clip{self.n:03d}", style=self.settings["style"], layout=self.settings["layout"],
                  status="queued", version=0, made_at=time.time())
@@ -450,6 +483,14 @@ class Session:
             self.job["clips"].append(c)
         jobs.save(self.job)
         jobs.submit_live(lambda: self._render(c))
+
+    @staticmethod
+    def _overlaps(a, b):
+        if a.get("status") == "error":
+            return False
+        left, right = max(float(a["start"]), float(b.get("start", 0))), min(float(a["end"]), float(b.get("end", 0)))
+        return right > left and (right - left) >= min(float(a["end"]) - float(a["start"]),
+                                                       float(b["end"]) - float(b.get("start", 0))) * 0.5
 
     def _render(self, clip):
         """Runs on the render worker: copy the needed buffer pieces, then make the clip."""
@@ -534,7 +575,8 @@ class Session:
                       "rejected": self.rejected, "verdicts": list(reversed(self.verdicts)),
                       "every_min": int(self.settings.get("ai_every_min", 3)) or 3,
                       "auto": None,
-                      "pending_clips": len(self.manual)})
+                      "pending_clips": len(self.manual), "reconnects": self.reconnects,
+                      "last_error": self.last_error})
         jobs.save(self.job)
 
     def _analyze(self):
@@ -641,8 +683,8 @@ def start_session(creator: dict, url=None) -> dict:
         raise ValueError("Add this creator's channel link first.")
     if active_for(creator["id"]):
         raise ValueError("This creator is already being recorded.")
-    if not media.site_allowed(url):
-        raise ValueError("Channel links must be from YouTube, Twitch or Kick.")
+    if not url_allowed(url):
+        raise ValueError("Use a YouTube, Twitch, Kick or configured direct stream URL.")
     if media.is_youtube(url) and media.youtube_paused():
         raise ValueError(media.YT_BLOCKED.replace("download videos", "record YouTube streams")
                          .replace("Upload the video file instead, or use a Twitch or Kick link. YouTube links",
@@ -657,6 +699,35 @@ def start_session(creator: dict, url=None) -> dict:
     jobs.save(job)
     Session(job, creator).start()
     return job
+
+
+def start_direct_session(url: str, creator=None) -> dict:
+    """Start a live session from a supported direct stream URL, optionally filed to a creator."""
+    url = normalize(url)
+    if not url_allowed(url):
+        raise ValueError("Direct streams must use an allowed host and a .m3u8, .mpd or stream URL.")
+    if creator:
+        return start_session(creator, url)
+    if active_for("") or len(active_mine()) >= config.MAX_LIVE_PER_USER:
+        raise ValueError("You are already recording the maximum number of streams.")
+    if len(active()) >= config.MAX_LIVE_TOTAL or (active() and load.busy()):
+        raise ValueError("Clipeer is recording as many streams as it can right now.")
+    job = jobs.create({"type": "live", "url": url, "name": "Direct live stream"}, {}, enqueue=False, kind="live")
+    job.update(status="live", stage="Connecting to the stream")
+    jobs.save(job)
+    Session(job, dict(creators.DEFAULTS)).start()
+    return job
+
+
+def resume_session(job):
+    if job.get("kind") != "live" or job.get("status") in ("live", "queued"):
+        raise ValueError("This recording cannot be resumed yet.")
+    if job["id"] in SESSIONS:
+        return job
+    creator = creators.get(job.get("creator")) if job.get("creator") else None
+    if creator:
+        return start_session(creator, job["source"]["url"])
+    return start_direct_session(job["source"]["url"])
 
 
 def _watch_user(uid):

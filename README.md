@@ -13,6 +13,8 @@ creator's live stream and clip the highlights while the stream is still running.
   renders each one with captions in one of three styles.
 - **Live clipping.** Records a stream into a rolling buffer and clips as it happens, using loudness, chat activity
   and the transcript.
+- **Direct live inputs.** YouTube Live, Twitch and Kick links work directly. HLS/DASH URLs can be enabled with
+  `PEAKCUT_DIRECT_STREAM_HOSTS`; this is intentionally opt-in so the server cannot be used as an arbitrary URL proxy.
 - **Workspaces per creator.** Channels, clip settings, posting rules and an activity log for each creator you clip.
 - **Posting.** Connect YouTube, Instagram and TikTok in one click, then queue or auto-post finished clips, with
   spacing and daily caps (see [DEPLOY.md](DEPLOY.md#connecting-youtube-instagram-and-tiktok) for the one-time setup).

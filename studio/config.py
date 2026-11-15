@@ -117,6 +117,9 @@ MAX_USER_GB = _limit("PEAKCUT_MAX_USER_GB")                      # disk space on
 MAX_CREATORS = int(_limit("PEAKCUT_MAX_CREATORS"))               # creators one account may add
 ALLOWED_SITES = tuple(s.strip().lower() for s in env(
     "PEAKCUT_ALLOWED_SITES", "youtube.com,youtu.be,twitch.tv,kick.com").split(",") if s.strip())
+# Direct HLS/DASH inputs are opt-in because accepting arbitrary URLs would turn the recorder into an SSRF proxy.
+DIRECT_STREAM_HOSTS = tuple(s.strip().lower() for s in env("PEAKCUT_DIRECT_STREAM_HOSTS", "").split(",") if s.strip())
+LIVE_RECONNECT_MINUTES = max(1, int(env("PEAKCUT_LIVE_RECONNECT_MINUTES", "10")))
 
 # ---------------------------------------------------------------- AI (bring your own key: see studio/ai.py)
 # These are the starting values. Whatever is saved from the dashboard (Settings, AI) is used instead.

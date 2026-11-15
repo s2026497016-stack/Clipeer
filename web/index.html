@@ -1245,6 +1245,8 @@ function drawShell() {  const nav = (v, icon, label, extra = "") => `<button cla
   put($("#nav"), nav("overview", navIc("home", "overview"), "Home") +
     nav("library", navIc("film", "library"), "All videos", (() => { const w = S.jobs.filter(j => ["queued", "running"].includes(j.status)).length;
       return w ? `<span class="working" title="${w} working now"><i></i>${w} working</span>` : S.jobs.length ? `<span class="count">${S.jobs.length}</span>` : ""; })()) +
+    nav("live", navIc("radio", "live"), "Live streams", (() => { const w = S.jobs.filter(j => j.kind === "live" && j.status === "live").length;
+      return w ? `<span class="working" title="${w} monitored now"><i></i>${w}</span>` : ""; })()) +
     nav("social", navIc("send", "social"), "Social publishing") +
     `<h4><span>Creators</span></h4>` +
     S.creators.map(c => nav("c:" + c.id, cav(c), c.name,
@@ -1261,10 +1263,11 @@ function drawShell() {  const nav = (v, icon, label, extra = "") => `<button cla
       <button class="icon-btn bell" data-act="bell" title="Notifications" aria-label="Notifications${S.status.unread ? `, ${S.status.unread} new` : ""}" aria-haspopup="dialog">${ic("bell")}${S.status.unread ? `<span class="dotn">${S.status.unread > 9 ? "9+" : S.status.unread}</span>` : ""}</button></div>` : ""));
   const c = creator();
   const recording = S.creators.filter(x => x.live_job).length;
-  let title = {overview:"Home", library:"All videos", social:"Social publishing", settings:"Settings", usage:"AI usage"}[S.view] || "", sub = "", act = "";
+  let title = {overview:"Home", library:"All videos", live:"Live streams", social:"Social publishing", settings:"Settings", usage:"AI usage"}[S.view] || "", sub = "", act = "";
   if (S.view === "usage") sub = "What the AI has been used for.";
   if (S.view === "overview") sub = `${greeting()}. ${S.creators.length} creator${S.creators.length === 1 ? "" : "s"}${recording ? `, ${recording} recording now` : ""}.`;
   if (S.view === "library") sub = "Every video and recording, across all creators.";
+  if (S.view === "live") sub = "Monitor streams, review detected moments, and resume interrupted recordings.";
   if (S.view === "social") sub = "Publish finished clips to your connected social accounts.";
   if (S.view === "settings") sub = (S.status.accounts === false ? "Your AI key and connected apps." : "Your profile, security and connected apps.");
   let pic = "", subHtml = null, tabs = "";
@@ -1297,7 +1300,7 @@ function drawShell() {  const nav = (v, icon, label, extra = "") => `<button cla
   put($("#title"), `<span>${esc(title)}</span>`); put($("#subtitle"), subHtml ?? esc(sub)); put($("#actions"), act);
 }
 
-const ROUTES = {overview: "", library: "videos", social: "social", settings: "settings", usage: "usage"};
+const ROUTES = {overview: "", library: "videos", live: "live", social: "social", settings: "settings", usage: "usage"};
 function pathFor(v, tab) {
   if (v.startsWith("c:")) return `/app/creators/${encodeURIComponent(v.slice(2))}${tab && tab !== "clips" ? "/" + tab : ""}`;
   if (v === "settings") return "/app/settings" + (tab ? "/" + tab : "");
@@ -1329,6 +1332,7 @@ function go(v, tab, fromHistory) {
       <p>Paste a link or drop in videos. You get captioned shorts back.</p><div id="add"></div></section>` : "";
   if (v === "overview") view.innerHTML = `<div id="ov"></div>`;
   else if (v === "library") view.innerHTML = `<div id="add"></div><div id="jobs"></div>`;
+  else if (v === "live") view.innerHTML = `<div id="livepage"></div>`;
   else if (v === "settings") view.innerHTML = `<div id="sform"></div>`;
   else if (v === "usage") { view.innerHTML = `<div id="usage"></div>`; loadUsage(); }
   else if (v === "social") { view.innerHTML = `<div id="social"></div>`; loadOverview().then(drawSocial); }
@@ -1339,6 +1343,7 @@ function go(v, tab, fromHistory) {
   if (v.startsWith("c:")) setTab(S.ctab);
   $("#main").scrollTo(0, 0); render();
   if (v === "overview") loadOverview();
+  if (v === "live") drawLive();
 }
 function setTab(t) {
   S.ctab = t;
@@ -1795,6 +1800,7 @@ function drawJobs() {
     if (!$(".empty", root)) root.innerHTML = `<div class="empty"><img src="/brand/favicon.svg" alt=""><b>${cid ? "No clips for this creator yet" : "No videos yet"}</b>${cid ? "Start recording their stream, or paste a link to one of their videos above." : "Paste a link above and the studio will find the best moments and turn them into clips."}</div>`;
     return;
   }
+
   $(".empty", root)?.remove();
   const ids = new Set(list.map(j => j.id));
   $$("section[data-job]", root).forEach(el => { if (!ids.has(el.dataset.job)) el.remove(); });
@@ -1804,6 +1810,19 @@ function drawJobs() {
     if (root.children[i] !== el) root.insertBefore(el, root.children[i] || null);
     put(el, jobHtml(j));
   });
+}
+
+function drawLive() {
+  const root = $("#livepage"); if (!root) return;
+  const live = S.jobs.filter(j => j.kind === "live");
+  const active = live.filter(j => j.status === "live");
+  put(root, `<section class="card"><div class="card-head"><div><h2>Monitor a live stream</h2><p class="sub">YouTube, Twitch, Kick, or a configured direct HLS/DASH URL.</p></div></div>
+    <div class="row"><input class="input" id="liveurl" placeholder="https://youtube.com/live/... or stream URL" style="flex:1;min-width:220px">
+    <select class="input" id="livecreator"><option value="">No creator workspace</option>${S.creators.map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("")}</select>
+    <button class="btn primary" data-act="startdirect">${ic("radio")}Start monitoring</button></div></section>
+    <section class="card"><div class="card-head"><div><h2>Currently monitored</h2><p class="sub">${active.length} active stream${active.length === 1 ? "" : "s"}</p></div></div>
+      ${active.length ? active.map(j => `<div class="livecard" style="margin-bottom:12px">${jobHtml(j)}</div>`).join("") : `<div class="empty"><b>No active streams</b><span>Start a stream above or use Record live from a creator workspace.</span></div>`}</section>
+    ${live.filter(j => j.status !== "live").length ? `<section class="card"><div class="card-head"><div><h2>Recent live sessions</h2></div></div>${live.filter(j => j.status !== "live").slice(0, 12).map(j => `<div class="livecard" style="margin-bottom:12px">${jobHtml(j)}${j.status !== "error" ? `<button class="btn sm" data-act="resumelive" data-j="${esc(j.id)}">${ic("play")}Resume monitoring</button>` : ""}</div>`).join("")}</section>` : ""}`);
 }
 
 /* ============================================================ creator pages */
@@ -2237,6 +2256,7 @@ $("#clipdlg").addEventListener("change", e => {
 function render() {
   drawShell(); drawJobs(); drawStream(); drawSelBar();
   if (S.view === "overview") drawOverview();
+  if (S.view === "live") drawLive();
   if ($("#clog")) drawLog();
   if (D.jid) drawClipDlg(false);
 }
@@ -2460,6 +2480,20 @@ document.addEventListener("click", async e => {
       S.creators.forEach(c => { if (c.live_job === d.j) c.live_job = null; }); render();
       toast("Recording stopped. Clips already made are kept.", "ok");
       api(`/api/live/${d.j}/stop`, {method:"POST"}).catch(e => toast(e.message, "bad")).finally(tick); return;
+    }
+    if (a === "startdirect") {
+      const url = $("#liveurl")?.value.trim();
+      if (!url) return toast("Paste a live stream URL first.", "bad");
+      b.disabled = true;
+      try { await send("/api/live", {url, creator: $("#livecreator")?.value || ""}); toast("Monitoring started.", "ok"); await tick(); }
+      finally { b.disabled = false; }
+      return;
+    }
+    if (a === "resumelive") {
+      b.disabled = true;
+      try { await send(`/api/live/${d.j}/resume`, {}, "POST"); toast("Monitoring resumed.", "ok"); await tick(); }
+      finally { b.disabled = false; }
+      return;
     }
     if (a === "clipnow") { await send(`/api/live/${d.j}/clip`, {seconds:Number(d.s)}); return toast(`Clipping the last ${d.s} seconds…`, "ok"); }
     if (a === "resendverify") {
