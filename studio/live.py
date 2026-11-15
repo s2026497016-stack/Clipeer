@@ -17,7 +17,7 @@ from . import alerts, auth, brain, config, creators, ctx, jobs, load, media, tra
 SESSIONS: dict = {}
 SEG_SEC = 6           # length of each buffer piece
 PAD = 8               # seconds kept either side of a clip so it can be re-trimmed later
-CHECK_EVERY = 180     # look at the stream every 3 minutes...
+CHECK_EVERY = 60      # review live gameplay once a minute...
 QUIET_MAX = 600       # ...but only ask the AI when something happened, or at most every 10 minutes when calm
 WINDOW = 240          # seconds of transcript shown to the AI per check
 SR = 16000
@@ -136,6 +136,7 @@ class Session:
         self.chat_total = 0
         self.chat_on = False
         self.last_check = 0.0
+        self.last_visual_check = 0.0
         self.words_at_check = 0
         self.checks = 0
         self.rejected = 0
@@ -362,6 +363,56 @@ class Session:
             self.last_spike = n
             self.spikes += 1
 
+
+    def _visual_check(self, now):
+        """Sample six frames from the last minute and ask Gemini for silent gameplay highlights."""
+        if time.time() - self.last_visual_check < 55 or now < 25:
+            return 0
+        self.last_visual_check = time.time()
+        end = min(float(now), self.seg_clock)
+        start = max(0.0, end - 60.0)
+        samples = [start + (end - start) * i / 5 for i in range(6)]
+        frames = []
+        with self.lock:
+            segments = list(self.segments)
+        for stamp in samples:
+            seg = next((x for x in segments if x[1] <= stamp <= x[2] and x[0].exists()), None)
+            if not seg:
+                continue
+            offset = max(0.0, stamp - seg[1])
+            try:
+                p = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{offset:.2f}", "-i", str(seg[0]),
+                                   "-frames:v", "1", "-vf", "scale=640:-2", "-f", "image2pipe",
+                                   "-vcodec", "mjpeg", "pipe:1"], capture_output=True, timeout=12,
+                                  creationflags=media.NO_WINDOW)
+                if p.returncode == 0 and p.stdout:
+                    frames.append((stamp, p.stdout))
+            except Exception:
+                continue
+        if len(frames) < 3:
+            return 0
+        try:
+            candidates, tokens = brain.judge_visual(frames, end, self.job["title"], self.job["uploader"],
+                                                     self.settings["min_len"], self.settings["max_len"])
+            self.tokens += tokens
+            added = 0
+            for c in candidates:
+                if c["score"] < max(55, int(self.settings["min_score"]) - 10):
+                    continue
+                if any(self._overlaps(c, old) for old in self.job["clips"]):
+                    continue
+                c["judges"] = {"visual": c["score"], "why": "Gemini visual gameplay detection"}
+                c["reason"] = f"{c['reason']} (Gemini identified a visible gameplay highlight.)"
+                self._add_clip(c)
+                added += 1
+            self.checks += 1
+            self._verdict({"t": round(end), "transcript": None, "reaction": None, "trigger": "Visual gameplay scan"},
+                          f"Visual judge: {added} clip(s) created" if added else "Visual judge: no clear gameplay highlight")
+            return tokens
+        except Exception as e:
+            self.last_error = str(e)[-200:]
+            return 0
+
     def _ai_check(self, window=None, why=None):
         """Judge 1 reads only the words. If it finds a moment, judge 2 reads only the loudness and chat activity
         for the same stretch, without seeing the words. A clip is made when both say yes (or as set in Setup)."""
@@ -371,16 +422,18 @@ class Session:
             ws, now = max(0.0, window[0]), window[1]
         else:
             now = self.t_done
-            ws = max(0.0, now - max(every, 3) * 60 - 90)  # each check overlaps the last by 90 s, so nothing falls between
+            ws = max(0.0, now - (max(every, 1) * 60 + 30))  # each check overlaps the last by 90 s, so nothing falls between
         self.last_check = self.t_done
         win = [w for w in self.words if ws <= w["s"] <= now]
+        if window is None:
+            self._visual_check(now)
         recent = [c for c in self.job["clips"] if c.get("score", 0) > 0 and time.time() - c.get("made_at", 0) < 3600]
         last_clip = max((c.get("made_at", 0) for c in self.job["clips"]), default=self.started_at)
         must = st["must_clip_min"] > 0 and time.time() - last_clip >= st["must_clip_min"] * 60
         verdict = {"t": round(now), "transcript": None, "reaction": None, "trigger": why}
         if len(win) < 15:
             self.skipped += 1
-            return self._verdict(verdict, "Skipped: nobody talking")
+            return self._verdict(verdict, "Skipped: fewer than 15 transcript words; visual scan still ran")
         if len(recent) >= st["live_per_hour"] and not must:
             self.skipped += 1
             return self._verdict(verdict, f"Skipped: {st['live_per_hour']} clips this hour already")
