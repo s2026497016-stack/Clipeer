@@ -1922,7 +1922,7 @@ function drawSocial() {
         <label class="f">Schedule (optional)<input id="socialDue" type="datetime-local"></label></div>
       <div class="row"><button class="btn primary" data-act="socialpublish">Queue selected clips</button><button class="btn" data-act="socialreview">Send selected clips for review</button></div>` : ""}
     <h3>Metadata review</h3>${(S.overview?.posts || []).filter(p => p.status === "review").length ? `<div class="social-pick">${S.overview.posts.filter(p => p.status === "review").map(p => `<div class="social-row" data-review="${esc(p.id)}">
-      <b>${esc(p.title || "Untitled clip")}</b><span class="sub">${esc(p.creator_name || "Creator")} · ${esc(p.platform)} · ${esc(p.account_name)}</span>
+      <video src="/media/${esc(p.job)}/${esc(S.jobs.find(j => j.id === p.job)?.clips.find(c => c.id === p.clip)?.file || "")}" controls playsinline preload="metadata" style="width:100%;max-height:260px;border-radius:10px"></video><b>${esc(p.title || "Untitled clip")}</b><span class="sub">${esc(p.creator_name || "Creator")} · ${esc(p.platform)} · ${esc(p.account_name)}</span>
       <input data-reviewmeta="title" value="${esc(p.title || "Clip")}" aria-label="Post title">
       <textarea data-reviewmeta="description" rows="3" aria-label="Post description">${esc(p.description || "")}</textarea>
       <input data-reviewmeta="hashtags" value="${esc((p.hashtags || []).map(x => "#" + x).join(" "))}" aria-label="Hashtags">
@@ -2333,7 +2333,7 @@ document.addEventListener("change", async e => {
   if (t.name === "mainch") return;  // saved by its own click handler
   if (t.closest("#cform") && t.type === "radio") { $$("#cform .plan").forEach(l => l.classList.toggle("on", l.contains(t))); return saveCreator(true); }
   if (!t.closest("#cform") || t.type !== "checkbox") return;
-  if (t.dataset.k === "autopost" && t.checked && !await ask("Turn on auto-posting?", "Clips that score high enough will be posted to the ticked accounts without you seeing them first.", "Turn on")) { t.checked = false; return; }
+  if (t.dataset.k === "autopost" && t.checked && !await ask("Turn on auto-posting?", "Clips that score high enough will be posted to the selected accounts. You can enable metadata review below.", "Turn on")) { t.checked = false; return; }
   saveCreator(true);
 });
 
