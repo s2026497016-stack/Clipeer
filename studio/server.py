@@ -1451,6 +1451,14 @@ def add_posts_batch(body: dict = Body(...)):
     return {"queued": len(made), "posts": [p["id"] for p in made]}
 
 
+@app.post("/api/posts/{pid}/review")
+def review_post(pid: str, body: dict = Body(...)):
+    try:
+        return posting.review_action(pid, str(body.get("action", "")), body.get("metadata"))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
 @app.post("/api/posts/{pid}/{action}")
 def post_action(pid: str, action: str):
     try:
