@@ -21,7 +21,6 @@ ENV CLIPEER_DATA=/data \
     CLIPEER_PORT=8765 \
     CLIPEER_TRUST_PROXY=1 \
     PYTHONUNBUFFERED=1
-VOLUME /data
 USER clipeer
 EXPOSE 8765
 HEALTHCHECK --interval=30s --timeout=5s --start-period=120s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/healthz', timeout=4)"
