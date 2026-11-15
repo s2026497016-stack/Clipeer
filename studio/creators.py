@@ -15,7 +15,7 @@ def _root() -> Path:
 _lock = threading.RLock()
 
 DEFAULTS = {"name": "", "channel": "", "style": "bounce", "layout": "blur", "min_len": 15, "max_len": 60,
-            "max_clips": 6, "min_score": 80, "auto_watch": False, "auto_uploads": False, "buffer_min": 20, "live_per_hour": 4, "ai_every_min": 3, "ai_only_on_spike": True, "auto_jump_pct": 60,
+            "max_clips": 6, "min_score": 80, "auto_watch": False, "auto_uploads": False, "buffer_min": 20, "live_per_hour": 4, "ai_every_min": 1, "ai_only_on_spike": True, "auto_jump_pct": 60,
             "plan": "free", "decide_mode": "both", "must_clip_min": 0, "min_gap_min": 2,
             "trigger_words": "clip that, clip it",
             "autopost": False, "review_before_post": False, "accounts": [], "post_min_score": 75, "post_gap_min": 45, "daily_cap": 6,
@@ -35,8 +35,8 @@ def _fix(c: dict) -> dict:
     if c.get("channel") and platform_key(c["channel"]) and c["channel"] not in ch.values():
         ch.setdefault(platform_key(c["channel"]), c["channel"])
     c["channels"] = ch
-    if not c.get("ai_every_min"):
-        c["ai_every_min"] = 3       # "Auto" (0) is gone: jumps in loudness and chat are now always checked
+    if c.get("ai_every_min") in (None, 0, 3):
+        c["ai_every_min"] = 1       # migrate the old default; review live transcripts every minute
     if c.get("channel") not in ch.values():
         c["channel"] = next((ch[k] for k in PLATFORMS if k in ch), "")
     return c
