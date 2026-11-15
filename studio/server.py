@@ -57,6 +57,8 @@ def _startup():
     jobs.start()
     live.start()
     posting.start()
+    from . import uploads
+    uploads.start()
 
 
 # ================================================================ the gate: who is asking, and are they allowed
