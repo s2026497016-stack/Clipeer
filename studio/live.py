@@ -396,10 +396,18 @@ class Session:
                                                      self.settings["min_len"], self.settings["max_len"])
             self.tokens += tokens
             added = 0
+            recent = [old for old in self.job["clips"] if time.time() - old.get("made_at", 0) < 3600]
+            if len(recent) >= int(self.settings["live_per_hour"]):
+                self._verdict({"t": round(end), "transcript": None, "reaction": None, "trigger": "Visual gameplay scan"},
+                              "Visual judge skipped: hourly clip limit reached")
+                return tokens
             for c in candidates:
                 if c["score"] < max(55, int(self.settings["min_score"]) - 10):
                     continue
                 if any(self._overlaps(c, old) for old in self.job["clips"]):
+                    continue
+                if any(abs(c["start"] - old.get("start", 0)) < int(self.settings["min_gap_min"]) * 60
+                       for old in self.job["clips"]):
                     continue
                 c["judges"] = {"visual": c["score"], "why": "Gemini visual gameplay detection"}
                 c["reason"] = f"{c['reason']} (Gemini identified a visible gameplay highlight.)"
