@@ -16,11 +16,11 @@ import numpy as np
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 
-from . import transcribe
+from . import config, transcribe
 
-TOKEN = os.environ.get("PEAKCUT_ASR_TOKEN", "").strip()
-PORT = int(os.environ.get("PEAKCUT_ASR_PORT", "9000"))
-CARD_BATCH = int(os.environ.get("PEAKCUT_ASR_BATCH", "16"))
+TOKEN = config.env("PEAKCUT_ASR_TOKEN", "").strip()
+PORT = int(config.env("PEAKCUT_ASR_PORT", "9000"))
+CARD_BATCH = int(config.env("PEAKCUT_ASR_BATCH", "16"))
 MAX_BODY = 64 * 1024 * 1024             # about 33 minutes of sound in one request: far more than is ever sent
 MAX_PIECE = 16000 * 40                  # a piece is 12 to 24 seconds; 40 is the ceiling
 
@@ -79,7 +79,7 @@ def main():
         raise SystemExit("Set PEAKCUT_ASR_TOKEN: the speech machine refuses to start without a shared secret.")
     transcribe._recognizer()            # load the model now, so the first request is not the slow one
     print(f"Speech machine ready on port {PORT} ({transcribe.PROVIDER})", flush=True)
-    uvicorn.run(app, host=os.environ.get("PEAKCUT_ASR_HOST", "0.0.0.0"), port=PORT, log_level="warning")
+    uvicorn.run(app, host=config.env("PEAKCUT_ASR_HOST", "0.0.0.0"), port=PORT, log_level="warning")
 
 
 if __name__ == "__main__":
