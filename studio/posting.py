@@ -35,7 +35,7 @@ _posts = [_normalise(p) for p in _posts if isinstance(p, dict)]
 def _mine() -> list:
     u = ctx.uid()
     return [p for p in _posts if p.get("user") == u]
-OPEN = ("scheduled", "posting")
+OPEN = ("scheduled", "posting", "review")
 
 
 def _save():
@@ -70,7 +70,7 @@ def _next_slot(account_id, gap_min, cap):
     return t
 
 
-def enqueue(job, clip, account_ids, now=False, metadata=None, due_at=None) -> list:
+def enqueue(job, clip, account_ids, now=False, metadata=None, due_at=None, review=False) -> list:
     c = creators.get(job["creator"]) or creators.DEFAULTS
     metadata = metadata if isinstance(metadata, dict) else {}
     if metadata.get("privacy") not in (None, "public", "unlisted", "private"):
@@ -93,7 +93,7 @@ def enqueue(job, clip, account_ids, now=False, metadata=None, due_at=None) -> li
                 continue  # never post the same clip to the same account twice
             due = time.time() if now else (float(due_at) if due_at is not None else _next_slot(aid, c["post_gap_min"], c["daily_cap"]))
             p = {"id": secrets.token_hex(8), "user": ctx.uid(), "job": job["id"], "clip": clip["id"], "creator": job["creator"],
-                 "account": aid, "account_name": acc["name"], "platform": acc["platform"], "status": "scheduled",
+                 "account": aid, "account_name": acc["name"], "platform": acc["platform"], "status": "review" if review else "scheduled",
                  "due_at": due, "created": time.time(), "title": clip.get("title") or clip.get("hook") or "Clip",
                  "description": clip.get("description", ""), "hashtags": clip.get("hashtags", []),
                  "privacy": c.get("privacy", "public"), "score": clip.get("score", 0), "tries": 0,
@@ -108,6 +108,8 @@ def enqueue(job, clip, account_ids, now=False, metadata=None, due_at=None) -> li
         _save()
     for p in made:
         _mirror(p)
+        if p.get("status") == "review":
+            alerts.notify("Clip ready for metadata review: " + p.get("title", "Clip") + " for " + p.get("account_name", "social account") + ". Open Clipeer → Social publishing.", kind="post")
     return made
 
 
@@ -129,7 +131,7 @@ def enqueue_many(items) -> list:
             except (TypeError, ValueError):
                 raise ValueError("That schedule time isn't valid.")
         metadata = {k: item[k] for k in ("title", "description", "hashtags", "privacy") if k in item}
-        made.extend(enqueue(job, clip, accounts_, now=bool(item.get("now")), metadata=metadata, due_at=due_at))
+        made.extend(enqueue(job, clip, accounts_, now=bool(item.get("now")), metadata=metadata, due_at=due_at, review=bool(item.get("review"))))
     if not made:
         raise ValueError("Nothing was queued. The selected clips may already be published.")
     return made
@@ -142,7 +144,7 @@ def on_clip_ready(job, clip):
         return
     if clip.get("score", 0) < c["post_min_score"]:
         return  # includes hand-made clips (score 0): those wait for you to press Post
-    made = enqueue(job, clip, c["accounts"])
+    made = enqueue(job, clip, c["accounts"], review=bool(c.get("review_before_post")) )
     if made:
         creators.log(c["id"], f"Queued for {len(made)} account(s): {clip.get('title') or clip.get('hook')}")
 
@@ -240,6 +242,38 @@ def _stats():
                 pass
         _save()
         time.sleep(1800)
+
+
+
+def review_action(pid, action, metadata=None):
+    """Save metadata, approve for publishing, or reject a post awaiting human review."""
+    with _lock:
+        p = next((x for x in _mine() if x["id"] == pid), None)
+        if not p or p.get("status") != "review":
+            raise ValueError("That clip is no longer waiting for review.")
+        if action in ("save", "approve"):
+            metadata = metadata if isinstance(metadata, dict) else {}
+            if "title" in metadata:
+                title = str(metadata["title"]).strip()[:100]
+                if not title:
+                    raise ValueError("Add a title before saving.")
+                p["title"] = title
+            if "description" in metadata:
+                p["description"] = str(metadata["description"])[:2000]
+            if "hashtags" in metadata:
+                tags = metadata["hashtags"] if isinstance(metadata["hashtags"], list) else str(metadata["hashtags"]).split()
+                p["hashtags"] = [str(x).lstrip("#").strip()[:40] for x in tags if str(x).strip()][:30]
+        if action == "approve":
+            p.update(status="scheduled", due_at=time.time(), error=None)
+        elif action == "reject":
+            p.update(status="rejected", error=None)
+        elif action != "save":
+            raise ValueError("Choose save, approve, or reject.")
+        _save()
+    _mirror(p)
+    if action == "approve":
+        alerts.notify("Approved for publishing: " + p.get("title", "Clip") + " → " + p.get("account_name", "social account") + ".", kind="post")
+    return {k: v for k, v in p.items() if k != "user"}
 
 
 def cancel(pid):
