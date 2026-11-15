@@ -35,8 +35,8 @@ def _fix(c: dict) -> dict:
     if c.get("channel") and platform_key(c["channel"]) and c["channel"] not in ch.values():
         ch.setdefault(platform_key(c["channel"]), c["channel"])
     c["channels"] = ch
-    if not c.get("ai_every_min"):
-        c["ai_every_min"] = 1       # GTA/gameplay-friendly: review the transcript every minute by default
+    if c.get("ai_every_min") in (None, 0, 3):
+        c["ai_every_min"] = 1       # migrate the old default; review live transcripts every minute
     if c.get("channel") not in ch.values():
         c["channel"] = next((ch[k] for k in PLATFORMS if k in ch), "")
     return c
