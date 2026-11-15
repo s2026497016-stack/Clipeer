@@ -70,7 +70,7 @@ def _next_slot(account_id, gap_min, cap):
     return t
 
 
-def enqueue(job, clip, account_ids, now=False, metadata=None, due_at=None) -> list:
+def enqueue(job, clip, account_ids, now=False, metadata=None, due_at=None, review=False) -> list:
     c = creators.get(job["creator"]) or creators.DEFAULTS
     metadata = metadata if isinstance(metadata, dict) else {}
     if metadata.get("privacy") not in (None, "public", "unlisted", "private"):
