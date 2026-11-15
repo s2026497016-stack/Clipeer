@@ -104,3 +104,58 @@ Rebuild the application from the original PeakCut source and interface, on an is
 - Gemini and Parakeet work with the user's existing local configuration, without disclosing or replacing secrets.
 - Existing database, .env, model files and backups are preserved.
 - No changes are made to main until the user reviews and approves the rebuild.
+
+
+## Detailed original UI and route audit
+
+### Original navigation found in web/index.html
+
+- Global navigation: Home, All videos, creator list, New creator.
+- Secondary areas: AI usage, Settings.
+- Per-creator tabs: Clips, Setup, Activity.
+- Settings tabs: Profile, Security, Apps.
+- Admin dashboard is shown only to admin users.
+- Home includes the original link/file composer and overview.
+- All videos is the cross-creator library.
+- Creator Clips contains live status/player, clip list and video composer.
+- The original interface uses the orange (#FF8B33) and dark-brown frame palette, Geist/Inter/Archivo Black/Anton/Poppins fonts, a collapsible sidebar, responsive layout, and a no-build plain JavaScript frontend.
+
+### Original HTTP/API surface
+
+The baseline studio/server.py contains 80 route decorators. They cover:
+
+- Public pages: landing, login, signup, password reset, privacy, terms, acceptable-use, robots, sitemap and health check.
+- Authentication: signup, verification, resend, forgot/reset password, login/logout, current user, password change, Google sign-in.
+- Video jobs: status, sync, list/detail, URL preview, create from link, upload (including chunked upload), re-render, delete, bulk delete, ZIP export and media delivery.
+- Creator workflows: list/create/edit/delete creators, channel preview/avatar, start/stop live recording and clip-now.
+- Account/settings: overview, settings read/write, profile photo, connected account list/removal, YouTube OAuth, Instagram connection, create/manage posts and test alerts.
+- AI usage and notifications.
+- Feedback and admin tools: feedback submission/review, email preview/test, admin overview, user detail/disable/delete.
+
+The route inventory is based on the decorators in the original baseline server.py, not on a proposed redesign.
+
+### Original AI and processing contracts
+
+- studio/ai.py centralizes the provider adapters. The baseline supports Gemini, OpenAI, Grok/xAI, Groq, OpenRouter, Claude/Anthropic, Ollama and custom OpenAI-compatible endpoints.
+- studio/brain.py defines the structured clip-selection schema and prompt logic. The returned clip metadata includes time range, score, category, hook, title, description, hashtags, highlight words and reason.
+- studio/jobs.py orchestrates download/input, audio, transcript, AI selection, rendering, fair queueing and persisted job state.
+- studio/live.py records live sessions into a rolling buffer, transcribes segments and asks the AI to select moments.
+- studio/render.py outputs 1080x1920 at 30 fps and defines Bounce, Hype and Clean caption styles plus hook rendering.
+- studio/transcribe.py uses Parakeet 0.6B through sherpa-onnx locally by default, with an optional remote ASR fallback.
+- studio/config.py uses PEAKCUT_* environment names, defaults to local SQLite at data/peakcut.db, stores models under data/models, and reads Google OAuth credentials from environment variables or a configured client file.
+
+## Audit status
+
+- [x] Confirmed original PeakCut commit and README.
+- [x] Inspected original contributor guide and project architecture.
+- [x] Inspected original FastAPI server and enumerated its route decorators.
+- [x] Inspected original signed-in app shell and navigation.
+- [x] Inspected original landing and authentication pages.
+- [x] Inspected original AI, clip-selection, jobs, live, media, transcription, rendering, creator, posting, accounts, database and auth modules.
+- [x] Inspected original dependency list and disposable test runner.
+- [x] Created isolated branch from the original commit and committed this rebuild plan.
+- [ ] Run original tests locally with a disposable data directory and spare port.
+- [ ] Verify the user's existing .env keys by checking names only (never print values).
+- [ ] Compare existing local data/model paths to original config before selecting a non-destructive compatibility strategy.
+
+No application implementation has been started. This branch currently contains the original PeakCut source plus this planning document.
