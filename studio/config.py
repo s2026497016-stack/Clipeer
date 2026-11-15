@@ -20,7 +20,17 @@ def _load_dotenv():
 
 
 _load_dotenv()
-env = os.environ.get
+
+
+def env(name: str, default=None):
+    """Read PeakCut settings, accepting the CLIPEER_ prefix used by the renamed app."""
+    value = os.environ.get(name)
+    if value is None:
+        if name.startswith("PEAKCUT_"):
+            value = os.environ.get("CLIPEER_" + name[len("PEAKCUT_"):])
+        elif name.startswith("CLIPEER_"):
+            value = os.environ.get("PEAKCUT_" + name[len("CLIPEER_"):])
+    return default if value is None else value
 
 
 _kept: dict = {}
