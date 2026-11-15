@@ -53,6 +53,7 @@ def main() -> int:
                 ("AI services", ["tests/test_ai.py"]),
                 ("render and publishing safety", ["tests/test_features.py"]),
                 ("live monitoring primitives", ["tests/test_live.py"]),
+                ("automatic creator upload detection", ["tests/test_upload_monitor.py"]),
                 ("no sign-in, and the AI key from the dashboard", ["tests/test_local.py"]),
                 ("Hindi and Urdu captions in Roman letters", ["tests/test_roman.py"]),
                 ("connecting YouTube, Instagram and TikTok", ["tests/test_connect.py"]),

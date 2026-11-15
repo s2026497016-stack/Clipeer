@@ -24,6 +24,10 @@ Clipeer runs as three containers on one Linux server: the app, PostgreSQL, and C
    admin, and no page or web request can make someone an admin: only that command can.
 6. Sign in as that admin, open **Settings, AI**, and add your AI key there (or put it in `.env`).
 
+## Automatic creator uploads
+
+In a creator’s Setup, enable **Detect new uploads and make clips automatically**. Clipeer checks each followed channel’s public video list every five minutes using the existing yt-dlp integration. The first scan records the latest video IDs as a baseline and skips the back catalogue. Later uploads are queued through the normal video-processing pipeline, using the creator’s saved clip settings and existing Gemini configuration. No additional API key is required. If **Auto-publish** is enabled for that creator, qualifying clips enter the existing scheduled social queue and respect the selected accounts, minimum clip score, posting gap and daily cap. Platform download restrictions and publishing API approval still apply.
+
 ## Connecting YouTube, Instagram and TikTok
 
 People connect their accounts with one click in **Settings, Connected apps**: they press Connect, sign in on the
