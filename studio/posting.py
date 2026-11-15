@@ -267,7 +267,7 @@ def review_action(pid, action, metadata=None):
             p.update(status="scheduled", due_at=time.time(), error=None)
         elif action == "reject":
             p.update(status="rejected", error=None)
-        else:
+        elif action != "save":
             raise ValueError("Choose save, approve, or reject.")
         _save()
     _mirror(p)
