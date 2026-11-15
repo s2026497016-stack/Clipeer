@@ -402,6 +402,8 @@ class Session:
                               "Visual judge skipped: hourly clip limit reached")
                 return tokens
             for c in candidates:
+                if len(recent) + added >= int(self.settings["live_per_hour"]):
+                    break
                 if c["score"] < max(55, int(self.settings["min_score"]) - 10):
                     continue
                 if any(self._overlaps(c, old) for old in self.job["clips"]):
