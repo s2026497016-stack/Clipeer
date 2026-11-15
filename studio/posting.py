@@ -251,7 +251,7 @@ def review_action(pid, action, metadata=None):
         p = next((x for x in _mine() if x["id"] == pid), None)
         if not p or p.get("status") != "review":
             raise ValueError("That clip is no longer waiting for review.")
-        if action == "save":
+        if action in ("save", "approve"):
             metadata = metadata if isinstance(metadata, dict) else {}
             if "title" in metadata:
                 title = str(metadata["title"]).strip()[:100]
@@ -263,7 +263,7 @@ def review_action(pid, action, metadata=None):
             if "hashtags" in metadata:
                 tags = metadata["hashtags"] if isinstance(metadata["hashtags"], list) else str(metadata["hashtags"]).split()
                 p["hashtags"] = [str(x).lstrip("#").strip()[:40] for x in tags if str(x).strip()][:30]
-        elif action == "approve":
+        if action == "approve":
             p.update(status="scheduled", due_at=time.time(), error=None)
         elif action == "reject":
             p.update(status="rejected", error=None)
